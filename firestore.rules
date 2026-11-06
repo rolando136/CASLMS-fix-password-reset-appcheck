@@ -1,0 +1,2471 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // COMMON HELPERS
+    // ============================================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userExists() {
+      return signedIn() &&
+        exists(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        );
+    }
+
+    function currentUser() {
+      return get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data;
+    }
+
+    function isActive() {
+      return userExists() &&
+        currentUser().status == 'active' &&
+        (
+          currentUser().get('emailVerificationRequired', false) != true ||
+          (
+            request.auth.token.get('email_verified', false) == true &&
+            request.auth.token.get('email', '') == currentUser().email
+          )
+        );
+    }
+
+    function isStudent() {
+      return isActive() &&
+        currentUser().role == 'student';
+    }
+
+    function isInstructor() {
+      return isActive() &&
+        currentUser().role == 'instructor';
+    }
+
+    function validInvitedSection(courseId, sectionId) {
+      let course = get(/databases/$(database)/documents/courses/$(courseId)).data;
+      return course.status == 'active' && sectionId is string && sectionId != '' &&
+        (sectionId == course.classCode ||
+          (exists(/databases/$(database)/documents/courseSections/$(sectionId)) &&
+           get(/databases/$(database)/documents/courseSections/$(sectionId)).data.courseId == courseId &&
+           get(/databases/$(database)/documents/courseSections/$(sectionId)).data.instructorId == course.instructorId &&
+           get(/databases/$(database)/documents/courseSections/$(sectionId)).data.status == 'active'));
+    }
+
+    function isAdmin() {
+      return isActive() &&
+        currentUser().role == 'admin';
+    }
+
+    function isStaff() {
+      return isInstructor() || isAdmin();
+    }
+
+    function isSelf(uid) {
+      return signedIn() &&
+        request.auth.uid == uid;
+    }
+
+    function courseExists(courseId) {
+      return exists(
+        /databases/$(database)/documents/courses/$(courseId)
+      );
+    }
+
+    function ownsCourse(courseId) {
+      return isInstructor() &&
+        courseExists(courseId) &&
+        get(
+          /databases/$(database)/documents/courses/$(courseId)
+        ).data.instructorId == request.auth.uid;
+    }
+
+    function canManageCourse(courseId) {
+      return isAdmin() || ownsCourse(courseId);
+    }
+
+    function validManualGrade(
+      itemCollection,
+      itemKey,
+      pointsKey
+    ) {
+      let itemId = resource.data[itemKey];
+
+      let item = get(
+        /databases/$(database)/documents/$(itemCollection)/$(itemId)
+      ).data;
+
+      return ownsCourse(item.courseId) &&
+        resource.data.courseId == item.courseId &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'score',
+            'feedback',
+            'status',
+            'gradedBy',
+            'gradedAt',
+            'updatedAt'
+          ]) &&
+        request.resource.data.status == 'graded' &&
+        request.resource.data.gradedBy ==
+          request.auth.uid &&
+        request.resource.data.gradedAt ==
+          request.time &&
+        request.resource.data.updatedAt ==
+          request.time &&
+        request.resource.data.score is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.score <=
+          item[pointsKey] &&
+        request.resource.data.feedback is string;
+    }
+
+    // ============================================================
+    // USERS
+    // ============================================================
+
+    match /users/{userId} {
+      allow get: if
+        isActive() ||
+        isSelf(userId);
+
+      allow list: if isActive();
+
+      // Student profiles and ID reservations are created atomically by the
+      // verified student-registration backend. Clients cannot self-activate.
+      allow create: if isAdmin();
+
+      allow update: if
+        isAdmin()
+        ||
+        (
+          isSelf(userId) &&
+          isActive() &&
+          request.resource.data.uid ==
+            resource.data.uid &&
+          request.resource.data.role ==
+            resource.data.role &&
+          request.resource.data.status ==
+            resource.data.status &&
+          request.resource.data.universityId ==
+            resource.data.universityId &&
+          request.resource.data.authEmail ==
+            resource.data.authEmail &&
+          (resource.data.get('emailVerificationRequired', false) != true ||
+            request.resource.data.email == resource.data.email) &&
+          !request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasAny([
+              'uid',
+              'role',
+              'status',
+              'approvalStatus',
+              'universityId',
+              'authEmail',
+              'emailVerificationRequired',
+              'emailVerifiedAt',
+              'instructorApplicationId',
+              'reviewedBy',
+              'reviewedAt',
+              'denialReason',
+              'createdAt'
+            ])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    // INSTRUCTOR APPLICATIONS
+    // ============================================================
+
+    match /instructorApplications/{applicationId} {
+      allow get: if
+        isAdmin()
+        ||
+        (
+          signedIn() &&
+          request.auth.uid ==
+            applicationId &&
+          resource.data.applicantId ==
+            request.auth.uid
+        );
+
+      allow list: if isAdmin();
+
+      // Supabase Edge Function uses Firebase Admin SDK.
+      allow create, update, delete:
+        if false;
+    }
+
+    // ============================================================
+    // COURSES
+    // ============================================================
+
+    match /courses/{courseId} {
+      allow read: if isActive();
+
+      allow create: if isAdmin() || (
+        isInstructor() &&
+        request.resource.data.instructorId ==
+          request.auth.uid
+      );
+
+      allow update: if isAdmin() || (
+        isInstructor() &&
+        resource.data.instructorId ==
+          request.auth.uid &&
+        request.resource.data.instructorId ==
+          resource.data.instructorId
+      );
+
+      allow delete: if isAdmin() || (
+        isInstructor() &&
+        resource.data.instructorId ==
+          request.auth.uid
+      );
+    }
+
+    // ============================================================
+    // VERIFIED COURSE INVITATIONS
+    // ============================================================
+
+    match /courseInvitations/{invitationId} {
+      function validInvitationIdentity(data) {
+        let course = get(
+          /databases/$(database)/documents/courses/$(data.courseId)
+        ).data;
+
+        let student = get(
+          /databases/$(database)/documents/users/$(data.studentId)
+        ).data;
+
+        return
+          data.keys().hasOnly([
+            'courseId',
+            'courseCode',
+            'courseTitle',
+            'instructorId',
+            'instructorName',
+            'studentId',
+            'studentCampusId',
+            'studentName',
+            'studentEmail',
+            'sectionId',
+            'sectionName',
+            'status',
+            'createdAt',
+            'updatedAt',
+            'respondedAt'
+          ]) &&
+          data.courseId is string &&
+          data.courseCode is string &&
+          data.courseTitle is string &&
+          data.instructorId is string &&
+          data.instructorName is string &&
+          data.studentId is string &&
+          data.studentCampusId is string &&
+          data.studentName is string &&
+          data.studentEmail is string &&
+          invitationId ==
+            data.courseId + "_" + data.studentId &&
+          course.instructorId == data.instructorId &&
+          course.status == 'active' &&
+          student.uid == data.studentId &&
+          student.role == 'student' &&
+          student.status == 'active' &&
+          student.universityId == data.studentCampusId &&
+          validInvitedSection(data.courseId, data.get('sectionId', course.classCode));
+      }
+
+      function invitationIdentityIsUnchanged() {
+        return
+          request.resource.data.courseId == resource.data.courseId &&
+          request.resource.data.courseCode == resource.data.courseCode &&
+          request.resource.data.courseTitle == resource.data.courseTitle &&
+          request.resource.data.instructorId == resource.data.instructorId &&
+          request.resource.data.instructorName == resource.data.instructorName &&
+          request.resource.data.studentId == resource.data.studentId &&
+          request.resource.data.studentCampusId == resource.data.studentCampusId &&
+          request.resource.data.studentName == resource.data.studentName &&
+          request.resource.data.studentEmail == resource.data.studentEmail;
+      }
+
+      function acceptedEnrollmentExistsAfter() {
+        let enrollmentPath =
+          /databases/$(database)/documents/enrollments/$(invitationId);
+
+        let enrollment = getAfter(enrollmentPath).data;
+
+        return
+          existsAfter(enrollmentPath) &&
+          enrollment.courseId == resource.data.courseId &&
+          enrollment.studentId == request.auth.uid &&
+          enrollment.invitationId == invitationId &&
+          enrollment.invitedBy == resource.data.instructorId &&
+          enrollment.enrollmentSource == 'instructor_invitation' &&
+          enrollment.sectionId == resource.data.get('sectionId', get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.classCode) &&
+          enrollment.status == 'active';
+      }
+
+      allow get: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          (
+            !exists(
+              /databases/$(database)/documents/courseInvitations/$(invitationId)
+            )
+            ||
+            ownsCourse(resource.data.courseId)
+          )
+        )
+        ||
+        (
+          isStudent() &&
+          resource.data.studentId == request.auth.uid
+        );
+
+      allow list: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId)
+        )
+        ||
+        (
+          isStudent() &&
+          resource.data.studentId == request.auth.uid
+        );
+
+      allow create: if
+        isInstructor() &&
+        validInvitationIdentity(request.resource.data) &&
+        request.resource.data.instructorId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.respondedAt == null;
+
+      allow update: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId) &&
+          invitationIdentityIsUnchanged() &&
+          validInvitationIdentity(request.resource.data) &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'status',
+              'createdAt',
+              'updatedAt',
+              'respondedAt',
+              'sectionId',
+              'sectionName'
+            ]) &&
+          request.resource.data.updatedAt == request.time &&
+          (
+            (
+              resource.data.status == 'pending' &&
+              request.resource.data.status == 'cancelled' &&
+              request.resource.data.createdAt == resource.data.createdAt &&
+              request.resource.data.respondedAt == request.time
+            )
+            ||
+            (
+              resource.data.status in ['accepted', 'declined', 'cancelled'] &&
+              request.resource.data.status == 'pending' &&
+              request.resource.data.createdAt == request.time &&
+              request.resource.data.respondedAt == null
+            )
+          )
+        )
+        ||
+        (
+          isStudent() &&
+          resource.data.studentId == request.auth.uid &&
+          resource.data.status == 'pending' &&
+          invitationIdentityIsUnchanged() &&
+          request.resource.data.get('sectionId', '') == resource.data.get('sectionId', '') &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.respondedAt == request.time &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'status',
+              'updatedAt',
+              'respondedAt'
+            ]) &&
+          request.resource.data.status in ['accepted', 'declined'] &&
+          (
+            request.resource.data.status == 'declined'
+            ||
+            acceptedEnrollmentExistsAfter()
+          )
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    // ENROLLMENTS
+    // ============================================================
+
+    // ============================================================
+    // COURSE SECTIONS
+    // ============================================================
+
+    match /courseSections/{sectionId} {
+
+      function validSectionText(data) {
+        return
+          data.name is string &&
+          data.name.size() > 0 &&
+          data.name.size() <= 80 &&
+          data.identifier is string &&
+          data.identifier.matches(
+            '^[A-Z0-9][A-Z0-9 -]{0,29}$'
+          );
+      }
+
+      // Students can resolve active section metadata for invitations.
+      // Students cannot list all section documents.
+
+      allow get: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          (
+            !exists(
+              /databases/$(database)/documents/courseSections/$(sectionId)
+            )
+            ||
+            ownsCourse(resource.data.courseId)
+          )
+        )
+        ||
+        (
+          isStudent() &&
+          (
+            !exists(
+              /databases/$(database)/documents/courseSections/$(sectionId)
+            )
+            ||
+            resource.data.status == 'active'
+          )
+        );
+
+      allow list: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId)
+        );
+
+      allow create: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          request.resource.data.keys().hasOnly([
+            'courseId',
+            'instructorId',
+            'name',
+            'identifier',
+            'classCode',
+            'legacy',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ]) &&
+          request.resource.data.keys().hasAll([
+            'courseId',
+            'instructorId',
+            'name',
+            'identifier',
+            'classCode',
+            'legacy',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ]) &&
+          request.resource.data.courseId is string &&
+          ownsCourse(request.resource.data.courseId) &&
+          request.resource.data.instructorId ==
+            request.auth.uid &&
+          request.resource.data.classCode == sectionId &&
+          request.resource.data.legacy is bool &&
+          request.resource.data.legacy == (
+            sectionId == get(
+              /databases/$(database)/documents/courses/$(request.resource.data.courseId)
+            ).data.classCode
+          ) &&
+          request.resource.data.status == 'active' &&
+          validSectionText(request.resource.data) &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time
+        );
+
+      allow update: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId) &&
+          resource.data.status == 'active' &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'name',
+              'identifier',
+              'status',
+              'updatedAt'
+            ]) &&
+          validSectionText(request.resource.data) &&
+          request.resource.data.status in [
+            'active',
+            'archived'
+          ] &&
+          (
+            resource.data.legacy != true ||
+            request.resource.data.status == 'active'
+          ) &&
+          request.resource.data.updatedAt == request.time
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /enrollments/{enrollmentId} {
+      function acceptedInvitation(data) {
+        let invitationPath =
+          /databases/$(database)/documents/courseInvitations/$(enrollmentId);
+
+        let invitation = getAfter(invitationPath).data;
+
+        return
+          existsAfter(invitationPath) &&
+          get(invitationPath).data.status == 'pending' &&
+          invitation.status == 'accepted' &&
+          invitation.courseId == data.courseId &&
+          invitation.studentId == request.auth.uid &&
+          invitation.studentCampusId == currentUser().universityId &&
+          data.invitationId == enrollmentId &&
+          data.invitedBy == invitation.instructorId &&
+          data.enrollmentSource == 'instructor_invitation' &&
+          get(/databases/$(database)/documents/courses/$(data.courseId)).data.instructorId == invitation.instructorId &&
+          data.sectionId == invitation.get('sectionId', get(/databases/$(database)/documents/courses/$(data.courseId)).data.classCode) &&
+          validInvitedSection(data.courseId, data.sectionId);
+      }
+
+      function validAcceptedEnrollment(data) {
+        return
+          data.keys().hasOnly([
+            'courseId',
+            'studentId',
+            'studentName',
+            'studentCampusId',
+            'status',
+            'enrollmentSource',
+            'invitationId',
+            'invitedBy',
+            'enrolledAt',
+            'acceptedAt',
+            'sectionId'
+          ]) &&
+          data.courseId is string &&
+          data.studentId == request.auth.uid &&
+          data.studentName is string &&
+          data.studentCampusId == currentUser().universityId &&
+          data.status == 'active' &&
+          (data.enrolledAt == request.time ||
+            (resource != null && resource.data.status == 'active' && data.enrolledAt == resource.data.enrolledAt)) &&
+          data.acceptedAt == request.time &&
+          enrollmentId == data.courseId + "_" + request.auth.uid &&
+          acceptedInvitation(data);
+      }
+
+      // Student enrollment requires an instructor invitation.
+      allow get: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          (
+            !exists(
+              /databases/$(database)/documents/enrollments/$(enrollmentId)
+            )
+            ||
+            ownsCourse(resource.data.courseId)
+          )
+        )
+        ||
+        (
+          isStudent() &&
+          enrollmentId.matches('.*_' + request.auth.uid)
+        );
+
+      allow list: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId)
+        )
+        ||
+        (
+          isStudent() &&
+          resource.data.studentId == request.auth.uid
+        );
+
+      allow create: if
+        isAdmin()
+        ||
+        (
+          isStudent() &&
+          validAcceptedEnrollment(request.resource.data)
+        );
+
+      allow update: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId) &&
+          request.resource.data.courseId == resource.data.courseId &&
+          request.resource.data.studentId == resource.data.studentId
+        )
+        ||
+        (
+          isStudent() &&
+          resource.data.studentId == request.auth.uid &&
+          request.resource.data.courseId == resource.data.courseId &&
+          request.resource.data.studentId == resource.data.studentId &&
+          (resource.data.status != 'active' || request.resource.data.sectionId == resource.data.get('sectionId', get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.classCode)) &&
+          validAcceptedEnrollment(request.resource.data)
+        );
+
+      allow delete: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId)
+        )
+        ||
+        (
+          isStudent() &&
+          resource.data.studentId == request.auth.uid
+        );
+    }
+
+    // ============================================================
+    // MODULES
+    // ============================================================
+
+    match /modules/{moduleId} {
+      allow read: if isActive();
+
+      allow create: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          request.resource.data.courseId
+        )
+      );
+
+      allow update: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        ) &&
+        request.resource.data.courseId ==
+          resource.data.courseId
+      );
+
+      allow delete: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        )
+      );
+    }
+
+    // ============================================================
+    // MODULE PROGRESS
+    // ============================================================
+
+    match /moduleProgress/{progressId} {
+      allow read: if isStaff() || (
+        isStudent() &&
+        resource.data.studentId ==
+          request.auth.uid
+      );
+
+      // Progress is calculated automatically.
+      allow create, update, delete:
+        if isAdmin();
+    }
+
+    // ============================================================
+    // LEGACY QUIZ ATTEMPTS
+    // ============================================================
+
+    match /quiz_attempts/{attemptId} {
+      allow get, list: if isStaff() || (
+        isStudent() &&
+        resource.data.studentId ==
+          request.auth.uid
+      );
+
+      allow create: if
+        isStudent() &&
+        request.resource.data.studentId ==
+          request.auth.uid &&
+        request.resource.data.quizId is string &&
+        request.resource.data.courseId is string &&
+        request.resource.data.score is number &&
+        request.resource.data.totalPoints is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.totalPoints >= 0 &&
+        request.resource.data.score <=
+          request.resource.data.totalPoints &&
+        request.resource.data.status in [
+          'in_progress',
+          'submitted'
+        ] &&
+        exists(
+          /databases/$(database)/documents/enrollments/$(request.resource.data.courseId + '_' + request.auth.uid)
+        ) &&
+        get(
+          /databases/$(database)/documents/enrollments/$(request.resource.data.courseId + '_' + request.auth.uid)
+        ).data.status == 'active';
+
+      allow update: if
+        isStudent() &&
+        resource.data.studentId ==
+          request.auth.uid &&
+        request.resource.data.studentId ==
+          resource.data.studentId &&
+        request.resource.data.quizId ==
+          resource.data.quizId &&
+        request.resource.data.courseId ==
+          resource.data.courseId &&
+        resource.data.status == 'in_progress' &&
+        request.resource.data.status ==
+          'submitted' &&
+        request.resource.data.score is number &&
+        request.resource.data.totalPoints is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.totalPoints >= 0 &&
+        request.resource.data.score <=
+          request.resource.data.totalPoints;
+
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    // LEARNING MATERIALS
+    // ============================================================
+
+    match /moduleResources/{resourceId} {
+      allow read: if isActive();
+
+      allow create: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          request.resource.data.courseId
+        ) &&
+        request.resource.data.createdBy ==
+          request.auth.uid
+      );
+
+      allow update: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        ) &&
+        request.resource.data.courseId ==
+          resource.data.courseId
+      );
+
+      allow delete: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        )
+      );
+    }
+
+    // ============================================================
+    // ASSESSMENTS
+    // ============================================================
+
+    match /assessments/{assessmentId} {
+      function isAiQuizData(data) {
+        return
+          data.get('assessmentType', '') == 'quiz' &&
+          data.get('deliveryType', '') == 'ai_generated';
+      }
+
+      function safeAiQuizClientCreate() {
+        return
+          !isAiQuizData(request.resource.data) ||
+          (
+            request.resource.data.get('status', '') == 'draft' &&
+            !request.resource.data.keys().hasAny([
+              'quizVersion',
+              'publishedAt'
+            ])
+          );
+      }
+
+      function safeAiQuizClientUpdate() {
+        let oldAi = isAiQuizData(resource.data);
+        let newAi = isAiQuizData(request.resource.data);
+
+        return
+          (!oldAi && !newAi) ||
+
+          // Instructors can continue editing unprotected drafts.
+          (
+            oldAi && newAi &&
+            resource.data.get('status', '') == 'draft' &&
+            request.resource.data.get('status', '') == 'draft' &&
+            !resource.data.keys().hasAny([
+              'quizVersion',
+              'publishedAt'
+            ]) &&
+            !request.resource.data.keys().hasAny([
+              'quizVersion',
+              'publishedAt'
+            ]) &&
+            request.resource.data.get('createdBy', '') ==
+              resource.data.get('createdBy', '') &&
+            request.resource.data.get('courseId', '') ==
+              resource.data.get('courseId', '') &&
+            request.resource.data.get('moduleId', '') ==
+              resource.data.get('moduleId', '')
+          ) ||
+
+          // Published quizzes can only be closed by a client.
+          // Public questions, scores, and answer keys stay unchanged.
+          (
+            oldAi && newAi &&
+            resource.data.get('status', '') == 'published' &&
+            request.resource.data.get('status', '') == 'closed' &&
+            request.resource.data.diff(resource.data)
+              .affectedKeys().hasOnly([
+                'status',
+                'updatedAt'
+              ])
+          );
+      }
+
+      // Legacy assessments with sectionId == '' are course-wide.
+      // New assessments with nonempty sectionId are section-restricted.
+      // Student list queries must constrain status and sectionId.
+      function studentCanReadAssessment(data) {
+        let enrollmentPath =
+          /databases/$(database)/documents/enrollments/$(data.courseId + "_" + request.auth.uid);
+
+        return
+          isStudent() &&
+          data.courseId is string &&
+          data.get('status', '') in ['published', 'closed'] &&
+          exists(enrollmentPath) &&
+          get(enrollmentPath).data.get('studentId', '') == request.auth.uid &&
+          get(enrollmentPath).data.get('courseId', '') == data.courseId &&
+          get(enrollmentPath).data.get('status', '') == 'active' &&
+          (
+            data.get('sectionId', '') == '' ||
+            (
+              data.get('sectionId', '') is string &&
+              get(enrollmentPath).data.get('sectionId', '') ==
+                data.get('sectionId', '')
+            )
+          );
+      }
+
+      function studentCanListAssessment(data) {
+        return studentCanReadAssessment(data) &&
+          data.keys().hasAll(['sectionId']) &&
+          data.sectionId is string;
+      }
+
+      allow get: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId)
+        )
+        ||
+        studentCanReadAssessment(resource.data);
+
+      allow list: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          ownsCourse(resource.data.courseId)
+        )
+        ||
+        studentCanListAssessment(resource.data);
+
+      allow create: if safeAiQuizClientCreate() && (
+        isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          request.resource.data.courseId
+        ) &&
+        request.resource.data.createdBy ==
+          request.auth.uid
+      )
+      );
+
+      allow update: if safeAiQuizClientUpdate() && (
+        isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        ) &&
+        request.resource.data.courseId ==
+          resource.data.courseId
+      )
+      );
+
+      allow delete: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        )
+      );
+    }
+
+    // ============================================================
+    // LEGACY QUIZZES
+    // ============================================================
+
+    match /quizzes/{quizId} {
+      allow read: if isActive();
+
+      allow create: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          request.resource.data.courseId
+        )
+      );
+
+      allow update: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        ) &&
+        request.resource.data.courseId ==
+          resource.data.courseId
+      );
+
+      allow delete: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        )
+      );
+    }
+
+    // ============================================================
+    // ASSESSMENT SUBMISSIONS
+    // ============================================================
+
+    match /assessmentSubmissions/{submissionId} {
+      function validAiQuizSubmissionCreate() {
+        let assessmentId =
+          request.resource.data.assessmentId;
+
+        let assessment = get(
+          /databases/$(database)/documents/assessments/$(assessmentId)
+        ).data;
+
+        let enrollmentId =
+          assessment.courseId + "_" + request.auth.uid;
+
+        let enrollmentPath =
+          /databases/$(database)/documents/enrollments/$(enrollmentId);
+
+        return
+          isStudent() &&
+          exists(enrollmentPath) &&
+          get(enrollmentPath).data.get('studentId', '') ==
+            request.auth.uid &&
+          get(enrollmentPath).data.get('courseId', '') ==
+            assessment.courseId &&
+          get(enrollmentPath).data.get('status', '') ==
+            'active' &&
+          get(enrollmentPath).data.get('sectionId', '') ==
+            assessment.get('sectionId', '') &&
+          request.resource.data.studentId ==
+            request.auth.uid &&
+          submissionId ==
+            assessmentId +
+            "_" +
+            request.auth.uid &&
+          assessment.deliveryType ==
+            'ai_generated' &&
+          assessment.assessmentType ==
+            'quiz' &&
+          assessment.status ==
+            'published' &&
+          request.resource.data.courseId ==
+            assessment.courseId &&
+          request.resource.data.moduleId ==
+            assessment.moduleId &&
+          request.resource.data.submissionType ==
+            'ai_quiz' &&
+          request.resource.data.gradingMode ==
+            'automatic' &&
+          request.resource.data.status ==
+            'graded' &&
+          request.resource.data.score is number &&
+          request.resource.data.totalPoints is number &&
+          assessment.get('totalPoints', 0) is number &&
+          request.resource.data.totalPoints ==
+            assessment.totalPoints &&
+          request.resource.data.totalPoints > 0 &&
+          request.resource.data.score >= 0 &&
+          request.resource.data.score <=
+            request.resource.data.totalPoints &&
+          request.resource.data.answers is list &&
+          request.resource.data.submittedAt ==
+            request.time &&
+          request.resource.data.gradedAt ==
+            request.time &&
+          request.resource.data.updatedAt ==
+            request.time;
+      }
+
+      function validFeedbackUpdate() {
+        let assessmentId =
+          resource.data.assessmentId;
+
+        let assessment = get(
+          /databases/$(database)/documents/assessments/$(assessmentId)
+        ).data;
+
+        let noticeId =
+          request.resource.data.feedbackNotificationId;
+
+        let notificationPath =
+          /databases/$(database)/documents/notifications/$(noticeId);
+
+        let notification =
+          getAfter(notificationPath).data;
+
+        return
+          ownsCourse(assessment.courseId) &&
+          resource.data.courseId ==
+            assessment.courseId &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'feedback',
+              'feedbackBy',
+              'feedbackAt',
+              'feedbackNotificationId',
+              'updatedAt'
+            ]) &&
+          request.resource.data.feedback
+            is string &&
+          request.resource.data.feedback.size() >
+            0 &&
+          request.resource.data.feedback.size() <=
+            5000 &&
+          request.resource.data.feedbackBy ==
+            request.auth.uid &&
+          request.resource.data.feedbackAt ==
+            request.time &&
+          request.resource.data.updatedAt ==
+            request.time &&
+          !exists(notificationPath) &&
+          notification.sourceType ==
+            'assessmentFeedback' &&
+          notification.sourceId ==
+            submissionId &&
+          notification.userId ==
+            resource.data.studentId &&
+          notification.actorId ==
+            request.auth.uid &&
+          notification.message ==
+            request.resource.data.feedback;
+      }
+
+      function validGoogleFormComplianceData(
+        data
+      ) {
+        let assessment = get(
+          /databases/$(database)/documents/assessments/$(data.assessmentId)
+        ).data;
+
+        let enrollmentPath =
+          /databases/$(database)/documents/enrollments/$(data.courseId + '_' + data.studentId);
+
+        let studentPath =
+          /databases/$(database)/documents/users/$(data.studentId);
+
+        let notificationPath =
+          /databases/$(database)/documents/notifications/$(data.complianceNotificationId);
+
+        let notification =
+          getAfter(notificationPath).data;
+
+        return
+          isInstructor() &&
+          ownsCourse(assessment.courseId) &&
+          assessment.get(
+            'submissionMethod',
+            ''
+          ) == 'google_form' &&
+          assessment.status == 'published' &&
+          data.assessmentId is string &&
+          data.studentId is string &&
+          submissionId ==
+            data.assessmentId +
+            '_' +
+            data.studentId &&
+          data.courseId ==
+            assessment.courseId &&
+          data.moduleId ==
+            assessment.moduleId &&
+          data.submissionType ==
+            'google_form' &&
+          data.submissionSource ==
+            'instructor_verification' &&
+          data.complianceStatus in [
+            'complied',
+            'not_complied'
+          ] &&
+          data.status ==
+            (
+              data.complianceStatus ==
+                'complied'
+                ? 'submitted'
+                : 'not_complied'
+            ) &&
+          data.verifiedBy ==
+            request.auth.uid &&
+          data.verifiedAt ==
+            request.time &&
+          data.updatedAt ==
+            request.time &&
+          (
+            data.complianceStatus ==
+              'complied'
+              ? data.submittedAt ==
+                  request.time
+              : data.submittedAt == null
+          ) &&
+          exists(enrollmentPath) &&
+          get(enrollmentPath).data.status ==
+            'active' &&
+          get(enrollmentPath).data.studentId ==
+            data.studentId &&
+          exists(studentPath) &&
+          get(studentPath).data.role ==
+            'student' &&
+          get(studentPath).data.status ==
+            'active' &&
+          !exists(notificationPath) &&
+          notification.userId ==
+            data.studentId &&
+          notification.sourceType ==
+            'googleFormCompliance' &&
+          notification.sourceId ==
+            submissionId &&
+          notification.actorId ==
+            request.auth.uid &&
+          notification.courseId ==
+            data.courseId &&
+          notification.moduleId ==
+            data.moduleId &&
+          notification.createdAt ==
+            request.time;
+      }
+
+      function validGoogleFormComplianceCreate() {
+        return
+          validGoogleFormComplianceData(
+            request.resource.data
+          ) &&
+          request.resource.data.createdAt ==
+            request.time &&
+          request.resource.data.score == null &&
+          request.resource.data.gradedAt == null &&
+          request.resource.data.gradedBy == null;
+      }
+
+      function validGoogleFormComplianceUpdate() {
+        return
+          validGoogleFormComplianceData(
+            request.resource.data
+          ) &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'studentName',
+              'studentEmail',
+              'submissionType',
+              'submissionSource',
+              'complianceStatus',
+              'status',
+              'verifiedBy',
+              'verifiedAt',
+              'complianceNotificationId',
+              'submittedAt',
+              'updatedAt'
+            ]);
+      }
+
+      allow get: if isAdmin() ||
+        (isInstructor() && ownsCourse(resource.data.courseId)) ||
+        (
+        isStudent() &&
+        (
+          (
+            resource == null &&
+            submissionId.matches(
+              '.*_' + request.auth.uid
+            )
+          )
+          ||
+          (
+            resource != null &&
+            resource.data.studentId ==
+              request.auth.uid
+          )
+        )
+      );
+
+      allow list: if isAdmin() ||
+        (isInstructor() && ownsCourse(resource.data.courseId)) ||
+        (
+        isStudent() &&
+        resource.data.studentId ==
+          request.auth.uid
+      );
+
+      // File and Google Form submissions are written only by the verified
+      // Supabase Edge Function through the Firebase Admin SDK. The client may
+      // not directly create automatically scored in-app quiz results.
+      // AI quiz grades are created only by the trusted Admin SDK.
+      // Preserve narrowly scoped Google Form compliance creation.
+      allow create: if
+        validGoogleFormComplianceCreate() &&
+        request.resource.data.get('submissionType', '') != 'ai_quiz' &&
+        request.resource.data.get('gradingMode', '') != 'automatic' &&
+        request.resource.data.get('status', '') != 'graded' &&
+        request.resource.data.get('score', null) == null;
+
+      // Instructors can modify feedback or a Google Form compliance decision.
+      allow update: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          (
+            validFeedbackUpdate()
+            ||
+            validGoogleFormComplianceUpdate()
+          )
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    // PRIVATE AI QUIZ DRAFTS
+    // ============================================================
+
+    // Private answer keys. Only trusted Admin SDK code may access them.
+    // No mobile/web client can read or modify these documents.
+    match /aiQuizAnswerKeys/{assessmentId} {
+      allow read, write: if false;
+    }
+    match /aiQuizDrafts/{draftId} {
+      function validDraftData(data) {
+        let assessment = get(
+          /databases/$(database)/documents/assessments/$(data.assessmentId)
+        ).data;
+
+        let enrollmentPath =
+          /databases/$(database)/documents/enrollments/$(data.courseId + '_' + request.auth.uid);
+
+        return
+          isStudent() &&
+          data.keys().hasOnly([
+            'assessmentId',
+            'courseId',
+            'moduleId',
+            'studentId',
+            'answers',
+            'lastAnsweredQuestion',
+            'startedAt',
+            'updatedAt'
+          ]) &&
+          data.assessmentId is string &&
+          data.courseId is string &&
+          data.moduleId is string &&
+          data.studentId == request.auth.uid &&
+          draftId ==
+            data.assessmentId + '_' + request.auth.uid &&
+          assessment.deliveryType == 'ai_generated' &&
+          assessment.assessmentType == 'quiz' &&
+          assessment.status == 'published' &&
+          data.courseId == assessment.courseId &&
+          data.moduleId == assessment.moduleId &&
+          assessment.questions is list &&
+          data.answers is list &&
+          data.answers.size() <= assessment.questions.size() &&
+          data.lastAnsweredQuestion is int &&
+          data.lastAnsweredQuestion >= -1 &&
+          data.lastAnsweredQuestion < assessment.questions.size() &&
+          data.updatedAt == request.time &&
+          exists(enrollmentPath) &&
+          get(enrollmentPath).data.studentId == request.auth.uid &&
+          get(enrollmentPath).data.courseId == data.courseId &&
+          get(enrollmentPath).data.status == 'active';
+      }
+
+      allow get: if
+        isStudent() &&
+        (
+          (
+            resource == null &&
+            draftId.matches('.*_' + request.auth.uid)
+          )
+          ||
+          (
+            resource != null &&
+            resource.data.studentId == request.auth.uid
+          )
+        );
+
+      allow create: if
+        validDraftData(request.resource.data) &&
+        request.resource.data.startedAt == request.time;
+
+      allow update: if
+        resource.data.studentId == request.auth.uid &&
+        request.resource.data.assessmentId == resource.data.assessmentId &&
+        request.resource.data.courseId == resource.data.courseId &&
+        request.resource.data.moduleId == resource.data.moduleId &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.startedAt == resource.data.startedAt &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'answers',
+            'lastAnsweredQuestion',
+            'updatedAt'
+          ]) &&
+        validDraftData(request.resource.data);
+
+      allow delete: if
+        isStudent() &&
+        resource.data.studentId == request.auth.uid;
+
+      allow list: if false;
+    }
+
+    // ============================================================
+    // LEGACY ASSIGNMENTS
+    // ============================================================
+
+    match /assignments/{assignmentId} {
+      allow read: if isActive();
+
+      allow create: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          request.resource.data.courseId
+        )
+      );
+
+      allow update: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        ) &&
+        request.resource.data.courseId ==
+          resource.data.courseId
+      );
+
+      allow delete: if isAdmin() || (
+        isInstructor() &&
+        ownsCourse(
+          resource.data.courseId
+        )
+      );
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isStaff() || (
+        isStudent() &&
+        resource.data.studentId ==
+          request.auth.uid
+      );
+
+      allow create: if
+        isStudent() &&
+        request.resource.data.studentId ==
+          request.auth.uid;
+
+      allow update: if
+        isAdmin()
+        ||
+        (
+          isInstructor() &&
+          validManualGrade(
+            'assignments',
+            'assignmentId',
+            'points'
+          )
+        )
+        ||
+        (
+          isStudent() &&
+          resource.data.studentId ==
+            request.auth.uid &&
+          request.resource.data.studentId ==
+            resource.data.studentId &&
+          request.resource.data.assignmentId ==
+            resource.data.assignmentId &&
+          !request.resource.data.diff(resource.data)
+            .affectedKeys().hasAny([
+              'score',
+              'grade',
+              'feedback',
+              'gradedAt',
+              'gradedBy'
+            ])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    // ANNOUNCEMENTS
+    // ============================================================
+
+    match /announcements/{announcementId} {
+      function ownsAudience(data) {
+        return
+          data.createdBy ==
+            request.auth.uid &&
+          (
+            (
+              data.targetType == 'course' &&
+              ownsCourse(data.courseId)
+            )
+            ||
+            (
+              data.targetType ==
+                'all_classes' &&
+              data.courseId == ''
+            )
+          );
+      }
+
+      allow read: if isActive();
+
+      allow create: if isAdmin() || (
+        isInstructor() &&
+        ownsAudience(
+          request.resource.data
+        ) &&
+        request.resource.data.status ==
+          'published'
+      );
+
+      allow update: if isAdmin() || (
+        isInstructor() &&
+        ownsAudience(resource.data) &&
+        request.resource.data.createdBy ==
+          resource.data.createdBy &&
+        request.resource.data.courseId ==
+          resource.data.courseId &&
+        request.resource.data.targetType ==
+          resource.data.targetType
+      );
+
+      allow delete: if isAdmin() || (
+        isInstructor() &&
+        ownsAudience(resource.data)
+      );
+    }
+
+    // ============================================================
+    // NOTIFICATIONS
+    // ============================================================
+
+    match /notifications/{notificationId} {
+      function activeEnrollee(data) {
+        let enrollmentId =
+          data.authorizationCourseId +
+          "_" +
+          data.userId;
+
+        let enrollment = get(
+          /databases/$(database)/documents/enrollments/$(enrollmentId)
+        ).data;
+
+        return
+          enrollment.courseId ==
+            data.authorizationCourseId &&
+          enrollment.studentId ==
+            data.userId &&
+          enrollment.status == 'active';
+      }
+
+      function publishedSource(
+        data,
+        collection,
+        sourceType,
+        type
+      ) {
+        let source = get(
+          /databases/$(database)/documents/$(collection)/$(data.sourceId)
+        ).data;
+
+        return
+          data.sourceType == sourceType &&
+          data.type == type &&
+          source.status == 'published' &&
+          source.courseId == data.courseId &&
+          data.courseId ==
+            data.authorizationCourseId &&
+          (
+            sourceType == 'module'
+              ? data.moduleId ==
+                  data.sourceId
+              : data.moduleId ==
+                  source.get(
+                    'moduleId',
+                    ''
+                  )
+          ) &&
+          activeEnrollee(data) &&
+          (source.get('sectionId', '') == '' ||
+            get(/databases/$(database)/documents/enrollments/$(data.authorizationCourseId + '_' + data.userId)).data.get('sectionId',
+              get(/databases/$(database)/documents/courses/$(data.authorizationCourseId)).data.get('classCode', '')) == source.sectionId) &&
+          (
+            // AI quiz notification section isolation.
+            // Ordinary course notifications retain their existing access.
+            sourceType != 'assessment' ||
+            source.get('deliveryType', '') != 'ai_generated' ||
+            source.get('assessmentType', '') != 'quiz' ||
+            (
+              source.get('sectionId', '') is string &&
+              source.get('sectionId', '') != '' &&
+              get(
+                /databases/$(database)/documents/enrollments/$(data.authorizationCourseId + '_' + data.userId)
+              ).data.get('sectionId', '') ==
+                source.get('sectionId', '')
+            )
+          );
+      }
+
+      function announcementSource(data) {
+        let source = get(
+          /databases/$(database)/documents/announcements/$(data.sourceId)
+        ).data;
+
+        return
+          data.type == 'announcement' &&
+          source.createdBy ==
+            request.auth.uid &&
+          source.status == 'published' &&
+          data.title == source.title &&
+          data.message == source.message &&
+          data.isUrgent ==
+            source.isUrgent &&
+          (
+            (
+              source.targetType ==
+                'course' &&
+              data.courseId ==
+                source.courseId &&
+              data.authorizationCourseId ==
+                source.courseId
+            )
+            ||
+            (
+              source.targetType ==
+                'all_classes' &&
+              source.courseId == '' &&
+              data.courseId == ''
+            )
+          ) &&
+          activeEnrollee(data);
+      }
+
+      function gradeSource(
+        data,
+        collection,
+        itemCollection,
+        itemKey
+      ) {
+        let submission = get(
+          /databases/$(database)/documents/$(collection)/$(data.sourceId)
+        ).data;
+
+        let itemId =
+          submission[itemKey];
+
+        let item = get(
+          /databases/$(database)/documents/$(itemCollection)/$(itemId)
+        ).data;
+
+        return
+          data.type == 'grade' &&
+          submission.status == 'graded' &&
+          submission.gradedBy ==
+            request.auth.uid &&
+          submission.get(
+            'gradingMode',
+            ''
+          ) != 'automatic' &&
+          submission.studentId ==
+            data.userId &&
+          submission.courseId ==
+            item.courseId &&
+          item.courseId == data.courseId &&
+          data.courseId ==
+            data.authorizationCourseId &&
+          data.moduleId ==
+            item.get('moduleId', '') &&
+          data.title ==
+            'Graded: ' + item.title;
+      }
+
+      function validSource(data) {
+        return
+          data.sourceType == 'course'
+            ? (data.type == 'course' && data.sourceId == data.courseId &&
+                data.courseId == data.authorizationCourseId && data.moduleId == '' &&
+                get(/databases/$(database)/documents/courses/$(data.sourceId)).data.status == 'active' &&
+                activeEnrollee(data))
+          : data.sourceType == 'module'
+            ? publishedSource(
+                data,
+                'modules',
+                'module',
+                'module'
+              )
+          : data.sourceType ==
+              'moduleResource'
+            ? publishedSource(
+                data,
+                'moduleResources',
+                'moduleResource',
+                'resource'
+              )
+          : data.sourceType ==
+              'assessment'
+            ? publishedSource(
+                data,
+                'assessments',
+                'assessment',
+                'assessment'
+              )
+          : data.sourceType ==
+              'assignment'
+            ? publishedSource(
+                data,
+                'assignments',
+                'assignment',
+                'assignment'
+              )
+          : data.sourceType ==
+              'announcement'
+            ? announcementSource(data)
+          : data.sourceType ==
+              'assessmentSubmission'
+            ? gradeSource(
+                data,
+                'assessmentSubmissions',
+                'assessments',
+                'assessmentId'
+              )
+          : data.sourceType ==
+              'submission'
+            ? gradeSource(
+                data,
+                'submissions',
+                'assignments',
+                'assignmentId'
+              )
+          : false;
+      }
+
+      function validNotice(data) {
+        return
+          data.keys().hasOnly([
+            'userId',
+            'type',
+            'sourceType',
+            'sourceId',
+            'title',
+            'message',
+            'courseId',
+            'authorizationCourseId',
+            'courseCode',
+            'courseTitle',
+            'moduleId',
+            'activityType',
+            'actorId',
+            'actorName',
+            'priority',
+            'isUrgent',
+            'isRead',
+            'readAt',
+            'createdAt'
+          ]) &&
+          data.userId is string &&
+          data.userId.size() > 0 &&
+          data.sourceId is string &&
+          data.sourceId.size() > 0 &&
+          data.authorizationCourseId
+            is string &&
+          data.courseId is string &&
+          data.title is string &&
+          data.title.size() > 0 &&
+          data.title.size() <= 2000 &&
+          data.message is string &&
+          data.message.size() <= 20000 &&
+          data.actorId ==
+            request.auth.uid &&
+          data.actorName is string &&
+          data.isUrgent is bool &&
+          data.priority ==
+            (
+              data.isUrgent
+                ? 'urgent'
+                : 'normal'
+            ) &&
+          (
+            data.type == 'announcement' ||
+            data.isUrgent == false
+          ) &&
+          data.isRead == false &&
+          data.readAt == null &&
+          data.createdAt ==
+            request.time &&
+          notificationId ==
+            data.sourceType +
+            "_" +
+            data.sourceId +
+            "_" +
+            data.userId &&
+          ownsCourse(
+            data.authorizationCourseId
+          ) &&
+          validSource(data);
+      }
+
+      function validAssessmentNoticeShape(
+        data
+      ) {
+        return
+          data.keys().hasAll([
+            'userId',
+            'type',
+            'sourceType',
+            'sourceId',
+            'actorId',
+            'actorName',
+            'title',
+            'message',
+            'courseId',
+            'moduleId',
+            'isRead',
+            'readAt',
+            'createdAt'
+          ]) &&
+          data.keys().hasOnly([
+            'userId',
+            'type',
+            'sourceType',
+            'sourceId',
+            'actorId',
+            'actorName',
+            'title',
+            'message',
+            'courseId',
+            'moduleId',
+            'isRead',
+            'readAt',
+            'createdAt'
+          ]) &&
+          data.userId is string &&
+          data.sourceId is string &&
+          data.actorId ==
+            request.auth.uid &&
+          data.actorName is string &&
+          data.title is string &&
+          data.title.size() <= 2000 &&
+          data.message is string &&
+          data.message.size() <= 5000 &&
+          data.courseId is string &&
+          data.moduleId is string &&
+          data.isRead == false &&
+          data.readAt == null &&
+          data.createdAt ==
+            request.time;
+      }
+
+      function validAssessmentFeedbackNotice(
+        data
+      ) {
+        let submission = getAfter(
+          /databases/$(database)/documents/assessmentSubmissions/$(data.sourceId)
+        ).data;
+
+        let assessmentId =
+          submission.assessmentId;
+
+        let assessment = get(
+          /databases/$(database)/documents/assessments/$(assessmentId)
+        ).data;
+
+        return
+          isInstructor() &&
+          validAssessmentNoticeShape(data) &&
+          data.type == 'feedback' &&
+          data.sourceType ==
+            'assessmentFeedback' &&
+          ownsCourse(
+            assessment.courseId
+          ) &&
+          submission.courseId ==
+            assessment.courseId &&
+          data.courseId ==
+            assessment.courseId &&
+          data.moduleId ==
+            assessment.get(
+              'moduleId',
+              ''
+            ) &&
+          data.userId ==
+            submission.studentId &&
+          submission.feedbackBy ==
+            request.auth.uid &&
+          submission.feedbackAt ==
+            request.time &&
+          submission.feedbackNotificationId ==
+            notificationId &&
+          data.message ==
+            submission.feedback &&
+          data.title ==
+            'Feedback: ' +
+            assessment.title;
+      }
+
+      function validGoogleFormComplianceNotice(
+        data
+      ) {
+        let submission = getAfter(
+          /databases/$(database)/documents/assessmentSubmissions/$(data.sourceId)
+        ).data;
+
+        let assessment = get(
+          /databases/$(database)/documents/assessments/$(submission.assessmentId)
+        ).data;
+
+        return
+          isInstructor() &&
+          validAssessmentNoticeShape(data) &&
+          data.sourceType ==
+            'googleFormCompliance' &&
+          data.type in [
+            'compliance_approved',
+            'compliance_rejected'
+          ] &&
+          ownsCourse(
+            assessment.courseId
+          ) &&
+          assessment.get(
+            'submissionMethod',
+            ''
+          ) == 'google_form' &&
+          submission.courseId ==
+            assessment.courseId &&
+          submission.moduleId ==
+            assessment.moduleId &&
+          submission.studentId ==
+            data.userId &&
+          submission.submissionType ==
+            'google_form' &&
+          submission.submissionSource ==
+            'instructor_verification' &&
+          submission.verifiedBy ==
+            request.auth.uid &&
+          submission.verifiedAt ==
+            request.time &&
+          submission.complianceNotificationId ==
+            notificationId &&
+          data.courseId ==
+            assessment.courseId &&
+          data.moduleId ==
+            assessment.moduleId &&
+          (
+            data.type ==
+              'compliance_approved'
+              ? submission.complianceStatus ==
+                  'complied' &&
+                submission.status ==
+                  'submitted'
+              : submission.complianceStatus ==
+                  'not_complied' &&
+                submission.status ==
+                  'not_complied'
+          );
+      }
+
+      function validAutomaticGradeNotice(
+        data
+      ) {
+        let submissionPath =
+          /databases/$(database)/documents/assessmentSubmissions/$(data.sourceId);
+
+        let submission =
+          getAfter(submissionPath).data;
+
+        let assessmentId =
+          submission.assessmentId;
+
+        let assessment = get(
+          /databases/$(database)/documents/assessments/$(assessmentId)
+        ).data;
+
+        return
+          isStudent() &&
+          validAssessmentNoticeShape(data) &&
+          data.type == 'grade' &&
+          data.sourceType ==
+            'automaticAssessmentGrade' &&
+          data.userId ==
+            request.auth.uid &&
+          submission.studentId ==
+            request.auth.uid &&
+          data.sourceId ==
+            assessmentId +
+            "_" +
+            request.auth.uid &&
+          notificationId ==
+            'assessmentGrade_' +
+            data.sourceId &&
+          submission.status ==
+            'graded' &&
+          submission.gradingMode ==
+            'automatic' &&
+          submission.gradedBy ==
+            'system:auto-score' &&
+          submission.gradedAt ==
+            request.time &&
+          submission.courseId ==
+            assessment.courseId &&
+          data.courseId ==
+            assessment.courseId &&
+          data.moduleId ==
+            assessment.get(
+              'moduleId',
+              ''
+            ) &&
+          data.actorName == 'CASLMS' &&
+          data.title ==
+            'Graded: ' +
+            assessment.title &&
+          (
+            !exists(submissionPath)
+            ||
+            !(
+              get(submissionPath).data.status
+                in [
+                  'submitted',
+                  'graded'
+                ]
+            )
+          );
+      }
+
+      allow get: if
+        isAdmin()
+        ||
+        (
+          isActive() &&
+          resource != null &&
+          resource.data.userId ==
+            request.auth.uid
+        )
+        ||
+        (
+          isInstructor() &&
+          (
+            !exists(
+              /databases/$(database)/documents/notifications/$(notificationId)
+            )
+            ||
+            (
+              resource.data.actorId ==
+                request.auth.uid &&
+              ownsCourse(
+                resource.data.authorizationCourseId
+              )
+            )
+          )
+        );
+
+      allow list: if isAdmin() || (
+        isActive() &&
+        resource.data.userId ==
+          request.auth.uid
+      );
+
+      function validConversationNotice(data) {
+        let conversation = getAfter(/databases/$(database)/documents/conversations/$(data.sourceId)).data;
+        let messagePath = /databases/$(database)/documents/conversations/$(data.sourceId)/messages/$(data.messageId);
+        let message = getAfter(messagePath).data;
+        return isActive() && data.get('sourceType', '') == 'conversation' &&
+          data.keys().hasOnly(['userId','type','sourceType','sourceId','messageId','actorId','title','message','courseId','isRead','readAt','createdAt']) &&
+          data.type == 'message' && data.actorId == request.auth.uid &&
+          notificationId == 'message_' + data.messageId + '_' + data.userId &&
+          !exists(messagePath) && message.senderId == request.auth.uid &&
+          message.receiverId == data.userId && message.sentAt == request.time &&
+          ((conversation.studentId == request.auth.uid && conversation.instructorId == data.userId) ||
+            (conversation.instructorId == request.auth.uid && conversation.studentId == data.userId)) &&
+          data.courseId == conversation.courseId && data.title == 'New message' &&
+          data.message == 'Open your conversation to read the message.' &&
+          data.isRead == false && data.readAt == null && data.createdAt == request.time;
+      }
+
+      function validEnrollmentNotice(data) {
+        let enrollment = getAfter(/databases/$(database)/documents/enrollments/$(data.sourceId)).data;
+        return isActive() && data.get('sourceType', '') == 'enrollment' &&
+          data.keys().hasOnly(['userId','type','sourceType','sourceId','actorId','title','message','courseId','isRead','readAt','createdAt']) &&
+          data.type == 'course_enrollment' && data.actorId == request.auth.uid &&
+          data.sourceId == data.courseId + '_' + data.userId &&
+          notificationId == 'enrollment_' + data.sourceId &&
+          enrollment.studentId == data.userId && enrollment.courseId == data.courseId && enrollment.status == 'active' &&
+          (request.auth.uid == data.userId || ownsCourse(data.courseId)) &&
+          data.title == 'Course enrollment confirmed' && data.message == 'Open your enrolled course.' &&
+          data.isRead == false && data.readAt == null && data.createdAt == request.time;
+      }
+
+      function validReceivedNotice(data, collection) {
+        let source = getAfter(/databases/$(database)/documents/$(collection)/$(data.sourceId)).data;
+        let course = get(/databases/$(database)/documents/courses/$(data.courseId)).data;
+        let assignment = get(/databases/$(database)/documents/assignments/$(source.assignmentId)).data;
+        let enrollment = get(/databases/$(database)/documents/enrollments/$(data.courseId + '_' + request.auth.uid)).data;
+        return isStudent() &&
+          data.keys().hasOnly(['userId','type','sourceType','sourceId','actorId','title','message','courseId','isRead','readAt','createdAt']) &&
+          notificationId == data.sourceType + '_' + data.sourceId + '_' + data.userId &&
+          data.actorId == request.auth.uid && source.studentId == request.auth.uid &&
+          source.courseId == data.courseId && course.instructorId == data.userId &&
+          assignment.courseId == data.courseId && enrollment.studentId == request.auth.uid &&
+          enrollment.courseId == data.courseId && enrollment.status == 'active' &&
+          source.status == 'submitted' && source.submittedAt == request.time &&
+          data.type == 'submission' && data.title == 'New assessment submission' &&
+          data.message == 'A student submitted work. Open this notification to review it.' &&
+          data.isRead == false && data.readAt == null && data.createdAt == request.time;
+      }
+
+      allow create: if
+        isAdmin()
+        || (request.resource.data.get('sourceType', '') == 'conversation' && validConversationNotice(request.resource.data))
+        || (request.resource.data.get('sourceType', '') == 'enrollment' && validEnrollmentNotice(request.resource.data))
+        || (request.resource.data.get('sourceType', '') == 'submissionReceived' && validReceivedNotice(request.resource.data, 'submissions'))
+        ||
+        (
+          request.resource.data.sourceType ==
+            'assessmentFeedback'
+              ? validAssessmentFeedbackNotice(
+                  request.resource.data
+                )
+          : request.resource.data.sourceType ==
+              'googleFormCompliance'
+              ? validGoogleFormComplianceNotice(
+                  request.resource.data
+                )
+          : request.resource.data.sourceType ==
+              'automaticAssessmentGrade'
+              ? validAutomaticGradeNotice(
+                  request.resource.data
+                )
+          : (
+              isInstructor() &&
+              validNotice(
+                request.resource.data
+              )
+            )
+        );
+
+      allow update: if isAdmin() || (
+        isActive() &&
+        resource.data.userId ==
+          request.auth.uid &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'isRead',
+            'readAt'
+          ]) &&
+        request.resource.data.isRead ==
+          true &&
+        request.resource.data.readAt ==
+          request.time
+      );
+
+      allow delete: if isAdmin() || (
+        isActive() &&
+        resource.data.userId ==
+          request.auth.uid
+      );
+    }
+
+    // ============================================================
+    // CONVERSATIONS
+    // ============================================================
+
+    match /conversations/{conversationId} {
+      function isConversationParticipant(
+        data
+      ) {
+        return
+          isActive() &&
+          data.participantIds is list &&
+          request.auth.uid in
+            data.participantIds;
+      }
+
+      function hasValidConversationMembers(
+        data
+      ) {
+        let enrollmentId =
+          data.courseId +
+          "_" +
+          data.studentId;
+
+        let enrollmentPath =
+          /databases/$(database)/documents/enrollments/$(enrollmentId);
+
+        return
+          data.courseId is string &&
+          data.instructorId is string &&
+          data.studentId is string &&
+          courseExists(data.courseId) &&
+          get(
+            /databases/$(database)/documents/courses/$(data.courseId)
+          ).data.instructorId ==
+            data.instructorId &&
+          exists(enrollmentPath) &&
+          get(enrollmentPath).data.courseId ==
+            data.courseId &&
+          get(enrollmentPath).data.studentId ==
+            data.studentId &&
+          get(enrollmentPath).data.status ==
+            'active';
+      }
+
+      allow get: if isAdmin() || (
+        isActive() &&
+        (
+          conversationId.matches(
+            '.*_' +
+            request.auth.uid +
+            '_.*'
+          )
+          ||
+          conversationId.matches(
+            '.*_' +
+            request.auth.uid
+          )
+        )
+      );
+
+      allow list: if
+        isAdmin() ||
+        (
+          isActive() &&
+          (
+            resource.data.instructorId ==
+              request.auth.uid ||
+            resource.data.studentId ==
+              request.auth.uid
+          )
+        );
+
+      allow create: if
+        isActive() &&
+        request.resource.data.participantIds
+          is list &&
+        request.resource.data.participantIds
+          .size() == 2 &&
+        request.auth.uid in
+          request.resource.data.participantIds &&
+        request.resource.data.instructorId in
+          request.resource.data.participantIds &&
+        request.resource.data.studentId in
+          request.resource.data.participantIds &&
+        hasValidConversationMembers(
+          request.resource.data
+        );
+
+      allow update: if isAdmin() || (
+        isConversationParticipant(
+          resource.data
+        ) &&
+        request.resource.data.participantIds ==
+          resource.data.participantIds &&
+        request.resource.data.courseId ==
+          resource.data.courseId &&
+        request.resource.data.instructorId ==
+          resource.data.instructorId &&
+        request.resource.data.studentId ==
+          resource.data.studentId
+      );
+
+      allow delete: if
+        isAdmin() ||
+        isConversationParticipant(
+          resource.data
+        );
+
+      match /messages/{messageId} {
+        function conversation() {
+          return get(
+            /databases/$(database)/documents/conversations/$(conversationId)
+          ).data;
+        }
+
+        function validMessageParticipants(data) {
+          return
+            data.senderId == request.auth.uid &&
+            data.receiverId in conversation().participantIds &&
+            data.receiverId != request.auth.uid &&
+            data.sentAt == request.time &&
+            data.isRead == false;
+        }
+
+        function validTextMessage(data) {
+          return
+            data.keys().hasOnly([
+              'senderId',
+              'receiverId',
+              'text',
+              'sentAt',
+              'isRead'
+            ]) &&
+            data.text is string &&
+            data.text.size() > 0 &&
+            data.text.size() <= 20000;
+        }
+
+        function validAttachmentMessage(data) {
+          return
+            data.keys().hasOnly([
+              'senderId',
+              'receiverId',
+              'text',
+              'messageType',
+              'attachmentKind',
+              'attachmentName',
+              'attachmentUrl',
+              'attachmentPath',
+              'attachmentMimeType',
+              'attachmentSizeBytes',
+              'storageProvider',
+              'storageBucket',
+              'sentAt',
+              'isRead'
+            ]) &&
+            data.messageType == 'attachment' &&
+            data.attachmentKind in ['image', 'file'] &&
+            data.text is string &&
+            data.text.size() <= 20000 &&
+            data.attachmentName is string &&
+            data.attachmentName.size() > 0 &&
+            data.attachmentName.size() <= 255 &&
+            data.attachmentUrl is string &&
+            data.attachmentUrl.matches(
+              'https://jymjlterjhznsxrwpjqz.supabase.co/storage/v1/object/public/caslms-learning-materials/.*'
+            ) &&
+            data.attachmentPath is string &&
+            data.attachmentPath.matches(
+              'courses/' +
+              conversation().courseId +
+              '/chats/' +
+              conversationId +
+              '/' +
+              messageId +
+              '/.*'
+            ) &&
+            data.attachmentMimeType is string &&
+            (
+              data.attachmentMimeType.matches('image/.*')
+              ||
+              data.attachmentMimeType in [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-powerpoint',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'text/plain'
+              ]
+            ) &&
+            data.attachmentSizeBytes is int &&
+            data.attachmentSizeBytes > 0 &&
+            data.attachmentSizeBytes <= 15728640 &&
+            data.storageProvider == 'supabase' &&
+            data.storageBucket == 'caslms-learning-materials';
+        }
+
+        allow read: if
+          isAdmin() ||
+          isConversationParticipant(
+            conversation()
+          );
+
+        allow create: if
+          isConversationParticipant(
+            conversation()
+          ) &&
+          validMessageParticipants(
+            request.resource.data
+          ) &&
+          (
+            validTextMessage(
+              request.resource.data
+            )
+            ||
+            validAttachmentMessage(
+              request.resource.data
+            )
+          );
+
+        allow update: if isAdmin() || (
+          isConversationParticipant(
+            conversation()
+          ) &&
+          resource.data.receiverId ==
+            request.auth.uid &&
+          request.resource.data.isRead ==
+            true &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'isRead',
+              'readAt'
+            ])
+        );
+
+        allow delete: if isAdmin() || (
+          isConversationParticipant(
+            conversation()
+          ) &&
+          resource.data.senderId ==
+            request.auth.uid
+        );
+      }
+    }
+
+    // ============================================================
+    // OPTIONAL TOP-LEVEL MESSAGES
+    // ============================================================
+
+    match /messages/{messageId} {
+      allow read: if isAdmin() || (
+        isActive() &&
+        (
+          resource.data.senderId ==
+            request.auth.uid ||
+          resource.data.receiverId ==
+            request.auth.uid
+        )
+      );
+
+      allow create: if
+        isActive() &&
+        request.resource.data.senderId ==
+          request.auth.uid;
+
+      allow update, delete:
+        if isAdmin() || (
+          isActive() &&
+          resource.data.senderId ==
+            request.auth.uid
+        );
+    }
+
+    // ============================================================
+    // ADMIN ACTIVITY HISTORY
+    // Append-only, source-bound app events. No passwords or tokens are stored.
+    match /activityLogs/{logId} {
+      function validActor(data) {
+        return isActive() && data.actorId == request.auth.uid &&
+          data.actorRole == currentUser().role &&
+          data.actorName == currentUser().get('name', '') &&
+          data.createdAt == request.time;
+      }
+      function validSession(data) {
+        return data.keys().hasOnly(['type','actorId','actorName','actorRole','sessionAuthTime','createdAt']) &&
+          data.type in ['login','logout'] &&
+          data.sessionAuthTime is int && data.sessionAuthTime == request.auth.token.auth_time &&
+          logId == data.type + '_' + string(data.sessionAuthTime) + '_' + request.auth.uid;
+      }
+      function validSource(data) {
+        let collection = data.type == 'course_created' ? 'courses' : 'moduleResources';
+        let source = get(/databases/$(database)/documents/$(collection)/$(data.targetId)).data;
+        return (isInstructor() || isAdmin()) && data.keys().hasOnly(['type','actorId','actorName','actorRole','targetId','courseId','title','occurredAt','createdAt']) &&
+          data.type in ['course_created','material_uploaded'] &&
+          data.targetId is string && data.targetId.size() > 0 &&
+          logId == data.type + '_' + data.targetId &&
+          data.title == source.title && data.occurredAt == source.createdAt &&
+          (
+            (data.type == 'course_created' && data.courseId == data.targetId &&
+              (source.instructorId == request.auth.uid || isAdmin())) ||
+            (data.type == 'material_uploaded' && data.courseId == source.courseId &&
+              source.deliveryType == 'uploaded_file' && source.createdBy == request.auth.uid &&
+              (ownsCourse(source.courseId) || isAdmin()))
+          );
+      }
+      allow get, list: if isAdmin();
+      allow create: if validActor(request.resource.data) &&
+        (validSession(request.resource.data) || validSource(request.resource.data));
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // DEFAULT DENY
+    // ============================================================
+
+    // Semester results are server-only, including for their owner. A Firebase
+    // session alone does not satisfy the separate password-reveal requirement.
+    match /semesterGrades/{document=**} {
+      allow read, write: if false;
+    }
+    match /semesterGradePolicies/{document=**} {
+      allow read, write: if false;
+    }
+    match /gradeRevealAttempts/{document=**} {
+      allow read, write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
