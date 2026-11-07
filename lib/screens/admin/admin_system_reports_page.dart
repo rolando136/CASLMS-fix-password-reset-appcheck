@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 import '../../models/admin_records.dart';
 import 'admin_download.dart';
@@ -273,6 +274,7 @@ class _AdminSystemReportsScreenState extends State<AdminSystemReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(

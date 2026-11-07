@@ -42,6 +42,7 @@ class StudentDashboardView extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       WorkspaceHeading(
+        showEyebrow: false,
         title: 'Hello, $firstName!',
         subtitle: 'A fresh start. A little focus. A step forward.',
         eyebrow: 'YOUR LEARNING SPACE',

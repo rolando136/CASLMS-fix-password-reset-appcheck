@@ -1,4 +1,8 @@
 import 'dart:ui' show PointerDeviceKind;
+import 'dart:typed_data';
+import 'dart:async';
+
+import 'package:file_picker/file_picker.dart';
 
 import 'package:caslms/core/app_theme.dart';
 import 'package:caslms/screens/shared/workspace_shell.dart';
@@ -12,6 +16,25 @@ class _ChatApi extends Fake implements ChatService {
   int conversationWatches = 0, messageWatches = 0, opened = 0;
   String uid = 'student';
   final sent = <String>[];
+  final files = <String>[];
+  String? attachmentCaption;
+  @override
+  Future<void> sendAttachment({
+    required String courseId,
+    required String studentId,
+    required String studentName,
+    required String instructorId,
+    required String instructorName,
+    required String receiverId,
+    required String fileName,
+    required Uint8List fileBytes,
+    String caption = '',
+  }) async {
+    expect(receiverId, instructorId);
+    files.add(fileName);
+    attachmentCaption = caption;
+  }
+
   @override
   String? get currentUserId => uid;
   @override
@@ -80,7 +103,120 @@ class _ChatApi extends Fake implements ChatService {
   }) async => sent.add(text);
 }
 
+final class _PickedFile extends PlatformFile {
+  _PickedFile(this.name, {this.reportedLength = 3});
+  @override
+  final String name;
+  final int reportedLength;
+  bool read = false;
+  @override
+  Uri get uri => Uri.parse('file:///attachment');
+  @override
+  Never get xFile => throw UnimplementedError();
+  @override
+  Future<int> length() async => reportedLength;
+  @override
+  Future<Uint8List> readAsBytes() async {
+    read = true;
+    return Uint8List.fromList([1, 2, 3]);
+  }
+
+  @override
+  Stream<Uint8List> readAsByteStream() =>
+      Stream.value(Uint8List.fromList([1, 2, 3]));
+}
+
+Future<void> _pumpAttachmentChat(
+  WidgetTester tester,
+  _ChatApi api,
+  Future<PlatformFile?> Function() pick,
+) => tester.pumpWidget(
+  MaterialApp(
+    theme: AppTheme.light,
+    home: StudentChatScreen(
+      courseId: 'course',
+      studentId: 'student',
+      studentName: 'Student',
+      instructorId: 'teacher',
+      instructorName: 'Teacher',
+      instructorEmail: '',
+      chatService: api,
+      attachmentPicker: pick,
+    ),
+  ),
+);
+
 void main() {
+  for (final name in ['photo.jpg', 'notes.pdf']) {
+    testWidgets('Student sends $name with the current caption', (tester) async {
+      final api = _ChatApi();
+      await _pumpAttachmentChat(tester, api, () async => _PickedFile(name));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Here is my work');
+      await tester.tap(find.byTooltip('Attach photo or file'));
+      await tester.pumpAndSettle();
+      expect(api.files, [name]);
+      expect(api.attachmentCaption, 'Here is my work');
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets(
+    'Cancelled and oversized attachments preserve the draft without sending',
+    (tester) async {
+      final api = _ChatApi();
+      final file = _PickedFile(
+        'huge.pdf',
+        reportedLength: ChatService.maximumAttachmentBytes + 1,
+      );
+      var cancelled = true;
+      await _pumpAttachmentChat(
+        tester,
+        api,
+        () async => cancelled ? null : file,
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Keep this draft');
+      await tester.tap(find.byTooltip('Attach photo or file'));
+      await tester.pumpAndSettle();
+      cancelled = false;
+      await tester.tap(find.byTooltip('Attach photo or file'));
+      await tester.pumpAndSettle();
+      expect(api.files, isEmpty);
+      expect(file.read, isFalse);
+      expect(
+        find.text('Chat attachments must be 15 MB or smaller.'),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Keep this draft',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('An account change during picking cannot send an attachment', (
+    tester,
+  ) async {
+    final api = _ChatApi();
+    final picked = Completer<PlatformFile?>();
+    await _pumpAttachmentChat(tester, api, () => picked.future);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Attach photo or file'));
+    await tester.pump();
+    api.uid = 'another-student';
+    picked.complete(_PickedFile('notes.pdf'));
+    await tester.pumpAndSettle();
+    expect(api.files, isEmpty);
+    expect(
+      find.text('Your session changed. Reopen the conversation.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
   for (final (width, scale) in [
     (320.0, 1.0),
     (390.0, 1.0),
@@ -140,6 +276,12 @@ void main() {
             .ancestor(of: contact, matching: find.byType(Material))
             .first;
         expect(tester.widget<Material>(material).elevation, 0);
+        expect(tester.widget<Material>(material).color, Colors.transparent);
+        expect(
+          (tester.widget<Material>(material).shape! as RoundedRectangleBorder)
+              .side,
+          BorderSide.none,
+        );
         expect(
           tester.widget<Material>(material).shadowColor,
           Colors.transparent,
@@ -174,6 +316,11 @@ void main() {
             find.byKey(const ValueKey('desktop-conversation-pane')),
           );
           expect(pane.left, greaterThan(tester.getRect(contact).right));
+          final composerSurface = tester.getRect(
+            find.byKey(const ValueKey('message-composer-surface')),
+          );
+          expect(composerSurface.left, closeTo(pane.left, 2));
+          expect(composerSurface.right, closeTo(pane.right, 2));
           final composer = find.byWidgetPredicate(
             (widget) =>
                 widget is TextField &&

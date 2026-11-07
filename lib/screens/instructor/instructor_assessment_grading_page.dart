@@ -4,7 +4,8 @@ import '../shared/grading_ui.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import 'instructor_ui.dart';
+import 'instructor_task_widgets.dart';
+import 'instructor_workspace_widgets.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 
@@ -18,10 +19,18 @@ class InstructorAssessmentGradingScreen extends StatefulWidget {
     super.key,
     required this.assessmentId,
     this.focusSubmissionId = '',
+    this.firestore,
+    this.submissionService,
+    this.artifactService,
+    this.rosterService,
   });
 
   final String assessmentId;
   final String focusSubmissionId;
+  final FirebaseFirestore? firestore;
+  final AssessmentSubmissionService? submissionService;
+  final AssessmentArtifactSubmissionService? artifactService;
+  final RosterService? rosterService;
 
   @override
   State<InstructorAssessmentGradingScreen> createState() =>
@@ -30,24 +39,26 @@ class InstructorAssessmentGradingScreen extends StatefulWidget {
 
 class _InstructorAssessmentGradingScreenState
     extends State<InstructorAssessmentGradingScreen> {
-  static const Color primaryTeal = AppColors.primaryBlue;
-  static const Color background = AppColors.background;
-  static const Color textDark = AppColors.darkText;
-  static const Color textGrey = AppColors.secondaryText;
-  static const Color borderColor = AppColors.inputBorder;
-  static const Color green = AppColors.green;
-  static const Color orange = AppColors.amber;
-  static const Color red = AppColors.error;
+  Color get primaryTeal => AppColors.resolve(context, AppColors.primaryBlue);
+  Color get background => AppColors.resolve(context, AppColors.background);
+  Color get textDark => AppColors.resolve(context, AppColors.darkText);
+  Color get textGrey => AppColors.resolve(context, AppColors.secondaryText);
+  Color get borderColor => AppColors.resolve(context, AppColors.inputBorder);
+  Color get green => AppColors.resolve(context, AppColors.green);
+  Color get orange => AppColors.resolve(context, AppColors.amber);
+  Color get red => AppColors.resolve(context, AppColors.error);
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late final FirebaseFirestore _firestore =
+      widget.firestore ?? FirebaseFirestore.instance;
 
-  final AssessmentSubmissionService _submissionService =
-      AssessmentSubmissionService();
+  late final AssessmentSubmissionService _submissionService =
+      widget.submissionService ?? AssessmentSubmissionService();
 
-  final AssessmentArtifactSubmissionService _artifactService =
-      AssessmentArtifactSubmissionService();
+  late final AssessmentArtifactSubmissionService _artifactService =
+      widget.artifactService ?? AssessmentArtifactSubmissionService();
 
-  final RosterService _rosterService = RosterService();
+  late final RosterService _rosterService =
+      widget.rosterService ?? RosterService();
 
   bool _isLoading = true;
   bool _feedbackDialogOpen = false;
@@ -390,7 +401,7 @@ class _InstructorAssessmentGradingScreenState
                       ),
                     ),
                     if (error != null)
-                      Text(error!, style: const TextStyle(color: red)),
+                      Text(error!, style: TextStyle(color: red)),
                   ],
                 ),
               ),
@@ -796,7 +807,7 @@ class _InstructorAssessmentGradingScreenState
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Feedback saved successfully.'),
           backgroundColor: green,
           behavior: SnackBarBehavior.floating,
@@ -809,42 +820,27 @@ class _InstructorAssessmentGradingScreenState
 
   @override
   Widget build(BuildContext context) {
-    return instructorScaffold(
-      context: context,
-      backgroundColor: background,
-      appBar: AppBar(
-        backgroundColor: background,
-        foregroundColor: textDark,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'Assessment Grading',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+    return InstructorTaskScaffold(
+      loading: _isLoading,
+      title: _isGoogleFormAssessment ? 'Student compliance' : 'Submissions',
+      subtitle: _isGoogleFormAssessment
+          ? 'Review form responses and verify each student.'
+          : 'Open student work, review scores, and save feedback.',
+      contextLabel: _isLoading ? null : _assessmentTitle,
+      actions: [
+        IconButton(
+          tooltip: 'Refresh submissions',
+          onPressed: _isLoading ? null : _loadPage,
+          icon: const Icon(Icons.refresh_rounded),
         ),
-        actions: [
-          RoundGradeAction(
-            icon: Icons.refresh_rounded,
-            label: 'Refresh assessment',
-            onTap: _isLoading ? null : _loadPage,
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1000),
-            child: _buildBody(),
-          ),
-        ),
-      ),
+      ],
+      body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: primaryTeal));
+      return Center(child: CircularProgressIndicator(color: primaryTeal));
     }
 
     if (_errorMessage != null) {
@@ -854,7 +850,7 @@ class _InstructorAssessmentGradingScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: red, size: 48),
+              Icon(Icons.error_outline, color: red, size: 48),
               const SizedBox(height: 12),
               Text(_errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
@@ -876,72 +872,42 @@ class _InstructorAssessmentGradingScreenState
       color: primaryTeal,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 40),
+        padding: InstructorTaskScaffold.paddingOf(context),
         children: [
           GradeEntrance(child: _buildHeader()),
           const SizedBox(height: 14),
-          const GradeSurface(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: Color(0xFFE5F5F2),
-                  child: Icon(Icons.route_outlined, color: gradeTeal),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '1. Find a student below.  2. Review their work.  3. Enter the score and save feedback.',
-                    style: TextStyle(
-                      color: gradeMuted,
-                      fontSize: 12,
-                      height: 1.6,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 22),
-          Row(
+          InstructorTiles(
+            minWidth: 88,
             children: [
-              Expanded(
-                child: _stat(
-                  _isGoogleFormAssessment ? 'Complied' : 'Total',
-                  _isGoogleFormAssessment
-                      ? '$_compliedCount'
-                      : '${_submissions.length}',
-                  _isGoogleFormAssessment
-                      ? Icons.check_circle_outline
-                      : Icons.people_alt_outlined,
-                  _isGoogleFormAssessment ? green : primaryTeal,
-                ),
+              _stat(
+                _isGoogleFormAssessment ? 'Complied' : 'Total',
+                _isGoogleFormAssessment
+                    ? '$_compliedCount'
+                    : '${_submissions.length}',
+                _isGoogleFormAssessment
+                    ? Icons.check_circle_outline
+                    : Icons.people_alt_outlined,
+                _isGoogleFormAssessment ? green : primaryTeal,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _stat(
-                  _isGoogleFormAssessment ? 'Pending' : 'Submitted',
-                  _isGoogleFormAssessment
-                      ? '$_pendingVerificationCount'
-                      : '$_submittedCount',
-                  _isGoogleFormAssessment
-                      ? Icons.hourglass_empty_rounded
-                      : Icons.pending_actions,
-                  orange,
-                ),
+              _stat(
+                _isGoogleFormAssessment ? 'Pending' : 'Submitted',
+                _isGoogleFormAssessment
+                    ? '$_pendingVerificationCount'
+                    : '$_submittedCount',
+                _isGoogleFormAssessment
+                    ? Icons.hourglass_empty_rounded
+                    : Icons.pending_actions,
+                orange,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _stat(
-                  _isGoogleFormAssessment ? 'Not Complied' : 'Graded',
-                  _isGoogleFormAssessment
-                      ? '$_notCompliedCount'
-                      : '$_gradedCount',
-                  _isGoogleFormAssessment
-                      ? Icons.cancel_outlined
-                      : Icons.verified_outlined,
-                  _isGoogleFormAssessment ? red : green,
-                ),
+              _stat(
+                _isGoogleFormAssessment ? 'Not Complied' : 'Graded',
+                _isGoogleFormAssessment
+                    ? '$_notCompliedCount'
+                    : '$_gradedCount',
+                _isGoogleFormAssessment
+                    ? Icons.cancel_outlined
+                    : Icons.verified_outlined,
+                _isGoogleFormAssessment ? red : green,
               ),
             ],
           ),
@@ -950,7 +916,7 @@ class _InstructorAssessmentGradingScreenState
             _isGoogleFormAssessment
                 ? 'Student Compliance'
                 : 'Student Submissions',
-            style: const TextStyle(
+            style: TextStyle(
               color: textDark,
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -961,7 +927,7 @@ class _InstructorAssessmentGradingScreenState
             _isGoogleFormAssessment
                 ? 'Check the Google Form responses, then verify each enrolled student.'
                 : 'Open submitted work, view scores and ratings, and provide feedback.',
-            style: const TextStyle(color: textGrey, fontSize: 12),
+            style: TextStyle(color: textGrey, fontSize: 12),
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -987,11 +953,11 @@ class _InstructorAssessmentGradingScreenState
             Container(
               padding: const EdgeInsets.all(30),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: borderColor),
               ),
-              child: const Column(
+              child: Column(
                 children: [
                   Icon(
                     Icons.assignment_turned_in_outlined,
@@ -1019,48 +985,27 @@ class _InstructorAssessmentGradingScreenState
 
     final String moduleTitle = (_module?['title'] ?? '').toString();
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: primaryTeal,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            [
-              if (courseCode.isNotEmpty) courseCode,
-              if (moduleTitle.isNotEmpty) moduleTitle,
-            ].join(' • '),
-            style: const TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _assessmentTitle,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InstructorContextLabel(
+          label: [
+            courseCode,
             (_course?['title'] ?? '').toString(),
-            style: const TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _headerChip(_assessmentType),
-              _headerChip('$_totalPoints points'),
-              _headerChip('Due ${_formatDate(_assessment?['dueAt'])}'),
-            ],
-          ),
-        ],
-      ),
+            moduleTitle,
+          ].where((value) => value.isNotEmpty).join(' · '),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _headerChip(_assessmentType),
+            _headerChip('$_totalPoints points'),
+            _headerChip('Due ${_formatDate(_assessment?['dueAt'])}'),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1068,40 +1013,15 @@ class _InstructorAssessmentGradingScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white, fontSize: 11),
-      ),
+      child: Text(text, style: TextStyle(color: textGrey, fontSize: 11)),
     );
   }
 
   Widget _stat(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: textDark,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(label, style: const TextStyle(color: textGrey, fontSize: 11)),
-        ],
-      ),
-    );
+    return InstructorMetric(label: label, value: value, icon: icon);
   }
 
   Widget _filter(String value, String label) {
@@ -1146,7 +1066,7 @@ class _InstructorAssessmentGradingScreenState
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(17),
         border: Border.all(color: borderColor),
       ),
@@ -1172,7 +1092,7 @@ class _InstructorAssessmentGradingScreenState
                   children: [
                     Text(
                       studentName.isEmpty ? 'Student' : studentName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: textDark,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1181,7 +1101,7 @@ class _InstructorAssessmentGradingScreenState
                       const SizedBox(height: 3),
                       Text(
                         studentEmail,
-                        style: const TextStyle(color: textGrey, fontSize: 11),
+                        style: TextStyle(color: textGrey, fontSize: 11),
                       ),
                     ],
                   ],
@@ -1209,7 +1129,7 @@ class _InstructorAssessmentGradingScreenState
             decision == 'pending_verification'
                 ? 'Check Google Forms for a response using this student’s registered email.'
                 : 'Decision recorded ${_formatDate(student['verifiedAt'])}. You can correct it if needed.',
-            style: const TextStyle(color: textGrey, fontSize: 11.5),
+            style: TextStyle(color: textGrey, fontSize: 11.5),
           ),
           const SizedBox(height: 14),
           Row(
@@ -1319,7 +1239,7 @@ class _InstructorAssessmentGradingScreenState
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(17),
         border: Border.all(color: borderColor),
       ),
@@ -1332,7 +1252,7 @@ class _InstructorAssessmentGradingScreenState
                 backgroundColor: primaryTeal.withValues(alpha: 0.10),
                 child: Text(
                   studentName.isEmpty ? '?' : studentName[0].toUpperCase(),
-                  style: const TextStyle(color: primaryTeal),
+                  style: TextStyle(color: primaryTeal),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1342,7 +1262,7 @@ class _InstructorAssessmentGradingScreenState
                   children: [
                     Text(
                       studentName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: textDark,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1352,7 +1272,7 @@ class _InstructorAssessmentGradingScreenState
                       graded
                           ? 'Graded ${_formatDate(submission['gradedAt'])}'
                           : 'Submitted ${_formatDate(submission['submittedAt'])}',
-                      style: const TextStyle(color: textGrey, fontSize: 11),
+                      style: TextStyle(color: textGrey, fontSize: 11),
                     ),
                   ],
                 ),
@@ -1390,7 +1310,7 @@ class _InstructorAssessmentGradingScreenState
                     children: [
                       Text(
                         _submissionTypeLabel(submission),
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: textDark,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1403,7 +1323,7 @@ class _InstructorAssessmentGradingScreenState
                               : fileName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: textGrey, fontSize: 11),
+                          style: TextStyle(color: textGrey, fontSize: 11),
                         ),
                       ] else if (submissionType == 'google_form') ...[
                         const SizedBox(height: 3),
@@ -1415,7 +1335,7 @@ class _InstructorAssessmentGradingScreenState
                               : 'Verified by the Google Forms webhook',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: textGrey, fontSize: 11),
+                          style: TextStyle(color: textGrey, fontSize: 11),
                         ),
                       ],
                     ],
@@ -1435,7 +1355,7 @@ class _InstructorAssessmentGradingScreenState
                       }
                     : null,
                 icon: opening
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 17,
                         height: 17,
                         child: CircularProgressIndicator(
@@ -1456,8 +1376,8 @@ class _InstructorAssessmentGradingScreenState
                       : 'Open Submitted File',
                 ),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: primaryTeal,
-                  side: const BorderSide(color: primaryTeal),
+                  foregroundColor: AppColors.resolve(context, AppColors.link),
+                  side: BorderSide(color: primaryTeal),
                   minimumSize: const Size(0, 45),
                 ),
               ),
@@ -1484,23 +1404,19 @@ class _InstructorAssessmentGradingScreenState
               feedback,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: textGrey),
+              style: TextStyle(color: textGrey),
             ),
           ],
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
+            child: OutlinedButton.icon(
               onPressed: () {
                 _openFeedbackDialog(submission);
               },
               icon: const Icon(Icons.comment_outlined),
-              label: const Text('View Score & Feedback'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTeal,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(0, 45),
-              ),
+              label: const Text('Score & feedback'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 45)),
             ),
           ),
         ],
@@ -1634,7 +1550,7 @@ class _AssessmentFeedbackDialogState extends State<_AssessmentFeedbackDialog> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.greenTint,
+                    color: AppColors.resolve(context, AppColors.greenTint),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -1680,7 +1596,7 @@ class _AssessmentFeedbackDialogState extends State<_AssessmentFeedbackDialog> {
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  Text(_error!, style: TextStyle(color: Colors.red)),
                 ],
               ],
             ),

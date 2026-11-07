@@ -52,9 +52,26 @@ void main() {
                       ? DarkAppColors.primaryBlue.withValues(alpha: .4)
                       : const Color(0xFFBED4FA)
                 : dark
-                ? DarkAppColors.inputBorder
-                : LightAppColors.inputBorder,
+                ? DarkAppColors.inputBorder.withValues(alpha: .5)
+                : LightAppColors.inputBorder.withValues(alpha: .5),
           );
+          expect(
+            (ink.decoration! as BoxDecoration).color,
+            unread
+                ? dark
+                      ? DarkAppColors.blueTint
+                      : LightAppColors.blueTint
+                : Colors.transparent,
+          );
+          final material = tester.widget<Material>(
+            find
+                .ancestor(
+                  of: find.byWidget(preview),
+                  matching: find.byType(Material),
+                )
+                .first,
+          );
+          expect(material.color, Colors.transparent);
         }
         for (final chip in tester.widgetList<ChoiceChip>(
           find.byType(ChoiceChip),

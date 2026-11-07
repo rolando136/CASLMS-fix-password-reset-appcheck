@@ -13,26 +13,9 @@ class StudentResultsScreen extends StatelessWidget {
     valueListenable: selection,
     builder: (context, selected, _) => Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (var index = 0; index < 3; index++)
-                ChoiceChip(
-                  label: Text(
-                    const [
-                      'Progress',
-                      'Activity scores',
-                      'Official grades',
-                    ][index],
-                  ),
-                  selected: selected == index,
-                  onSelected: (_) => selection.value = index,
-                ),
-            ],
-          ),
+        StudentResultTabs(
+          selected: selected,
+          onSelected: (index) => selection.value = index,
         ),
         Expanded(
           child: switch (selected) {
@@ -42,6 +25,42 @@ class StudentResultsScreen extends StatelessWidget {
           },
         ),
       ],
+    ),
+  );
+}
+
+class StudentResultTabs extends StatelessWidget {
+  const StudentResultTabs({
+    super.key,
+    required this.selected,
+    required this.onSelected,
+  });
+  final int selected;
+  final ValueChanged<int> onSelected;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var index = 0; index < 3; index++)
+            Padding(
+              padding: EdgeInsets.only(right: index == 2 ? 0 : 8),
+              child: ChoiceChip(
+                label: Text(
+                  const [
+                    'Progress',
+                    'Activity scores',
+                    'Official grades',
+                  ][index],
+                ),
+                selected: selected == index,
+                onSelected: (_) => onSelected(index),
+              ),
+            ),
+        ],
+      ),
     ),
   );
 }

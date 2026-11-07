@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 import '../../core/theme_notifier.dart';
 import '../shared/workspace_shell.dart';
@@ -566,6 +567,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
       body: SafeArea(
@@ -612,6 +614,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: WorkspaceHeading(
+                showEyebrow: false,
                 title: 'My profile',
                 subtitle: 'Manage your student identity, account details, and preferences.',
                 eyebrow: 'YOUR ACCOUNT',

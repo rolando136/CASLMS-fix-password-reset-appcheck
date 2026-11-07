@@ -778,7 +778,7 @@ class _CaslmsHelpPageState extends State<CaslmsHelpPage> {
                   onPressed: () =>
                       CaslmsOnboarding.replay(context, role: widget.role),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primaryBlue,
+                    foregroundColor: AppColors.resolve(context, AppColors.link),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     side: const BorderSide(
                       color: AppColors.primaryBlue,

@@ -21,11 +21,11 @@ class _InstructorAnnouncementsScreenState
   // DESIGN SYSTEM
   // ============================================================
 
-  static const Color primaryTeal = AppColors.primaryBlue;
-  static const Color background = AppColors.background;
-  static const Color textDark = AppColors.darkText;
-  static const Color textGrey = AppColors.secondaryText;
-  static const Color orange = AppColors.amber;
+  Color get primaryTeal => AppColors.resolve(context, AppColors.primaryBlue);
+  Color get background => AppColors.resolve(context, AppColors.background);
+  Color get textDark => AppColors.resolve(context, AppColors.darkText);
+  Color get textGrey => AppColors.resolve(context, AppColors.secondaryText);
+  Color get orange => AppColors.resolve(context, AppColors.amber);
 
   // ============================================================
   // SERVICE
@@ -150,6 +150,7 @@ class _InstructorAnnouncementsScreenState
   @override
   Widget build(BuildContext context) {
     return instructorScaffold(
+      loading: _isLoading,
       context: context,
       backgroundColor: background,
 
@@ -217,30 +218,33 @@ class _InstructorAnnouncementsScreenState
                         color: Color(0xFFA0A8B7),
                         fontSize: 13,
                       ),
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         Icons.search_rounded,
                         color: primaryTeal,
                       ),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: Theme.of(context).colorScheme.surface,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                          color: AppColors.inputBorder,
+                        borderSide: BorderSide(
+                          color: AppColors.resolve(
+                            context,
+                            AppColors.inputBorder,
+                          ),
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                          color: AppColors.inputBorder,
+                        borderSide: BorderSide(
+                          color: AppColors.resolve(
+                            context,
+                            AppColors.inputBorder,
+                          ),
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                          color: primaryTeal,
-                          width: 1.5,
-                        ),
+                        borderSide: BorderSide(color: primaryTeal, width: 1.5),
                       ),
                     ),
                   ),
@@ -265,7 +269,7 @@ class _InstructorAnnouncementsScreenState
     // ------------------------------------------------------------
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: primaryTeal));
+      return Center(child: CircularProgressIndicator(color: primaryTeal));
     }
 
     // ------------------------------------------------------------
@@ -288,10 +292,7 @@ class _InstructorAnnouncementsScreenState
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: textGrey,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: textGrey, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
               TextButton.icon(
@@ -310,7 +311,7 @@ class _InstructorAnnouncementsScreenState
     // ------------------------------------------------------------
 
     if (_announcements.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -340,7 +341,7 @@ class _InstructorAnnouncementsScreenState
     // ------------------------------------------------------------
 
     if (_filteredAnnouncements.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No matching announcements.',
           style: TextStyle(color: textGrey, fontWeight: FontWeight.w600),
@@ -404,12 +405,12 @@ class _InstructorAnnouncementsScreenState
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isUrgent
               ? orange.withValues(alpha: 0.40)
-              : AppColors.inputBorder,
+              : AppColors.resolve(context, AppColors.inputBorder),
           width: 1.5,
         ),
       ),
@@ -437,7 +438,7 @@ class _InstructorAnnouncementsScreenState
                           color: orange.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
@@ -461,7 +462,7 @@ class _InstructorAnnouncementsScreenState
                     ],
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: textDark,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
@@ -505,7 +506,7 @@ class _InstructorAnnouncementsScreenState
 
           Text(
             targetText,
-            style: const TextStyle(
+            style: TextStyle(
               color: primaryTeal,
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -522,11 +523,7 @@ class _InstructorAnnouncementsScreenState
           // ======================================================
           Text(
             message,
-            style: const TextStyle(
-              color: textDark,
-              fontSize: 13.5,
-              height: 1.55,
-            ),
+            style: TextStyle(color: textDark, fontSize: 13.5, height: 1.55),
           ),
 
           const SizedBox(height: 16),
@@ -536,16 +533,16 @@ class _InstructorAnnouncementsScreenState
           // ======================================================
           Row(
             children: [
-              const Icon(Icons.access_time_rounded, size: 14, color: textGrey),
+              Icon(Icons.access_time_rounded, size: 14, color: textGrey),
               const SizedBox(width: 5),
               Text(
                 createdAt == null ? 'Recently posted' : _formatDate(createdAt),
-                style: const TextStyle(color: textGrey, fontSize: 11),
+                style: TextStyle(color: textGrey, fontSize: 11),
               ),
               const Spacer(),
-              const Icon(Icons.public_rounded, color: textGrey, size: 14),
+              Icon(Icons.public_rounded, color: textGrey, size: 14),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'Published',
                 style: TextStyle(color: textGrey, fontSize: 11),
               ),
@@ -603,8 +600,8 @@ class _InstructorAnnouncementsScreenState
                   bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
                 ),
 
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
 
@@ -622,7 +619,7 @@ class _InstructorAnnouncementsScreenState
 
                       Row(
                         children: [
-                          const Expanded(
+                          Expanded(
                             child: Text(
                               'New Announcement',
                               style: TextStyle(
@@ -650,7 +647,7 @@ class _InstructorAnnouncementsScreenState
                       // ==========================================
                       // SEND TO
                       // ==========================================
-                      const Text(
+                      Text(
                         'Send To',
                         style: TextStyle(
                           color: textDark,
@@ -753,12 +750,18 @@ class _InstructorAnnouncementsScreenState
                         decoration: BoxDecoration(
                           color: isUrgent
                               ? orange.withValues(alpha: 0.06)
-                              : AppColors.background,
+                              : AppColors.resolve(
+                                  context,
+                                  AppColors.background,
+                                ),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isUrgent
                                 ? orange.withValues(alpha: 0.35)
-                                : AppColors.inputBorder,
+                                : AppColors.resolve(
+                                    context,
+                                    AppColors.inputBorder,
+                                  ),
                           ),
                         ),
                         child: SwitchListTile(
@@ -768,7 +771,7 @@ class _InstructorAnnouncementsScreenState
 
                           activeThumbColor: orange,
 
-                          title: const Text(
+                          title: Text(
                             'Urgent announcement',
                             style: TextStyle(
                               color: textDark,
@@ -777,7 +780,7 @@ class _InstructorAnnouncementsScreenState
                             ),
                           ),
 
-                          subtitle: const Text(
+                          subtitle: Text(
                             'Highlight this announcement for students.',
                             style: TextStyle(color: textGrey, fontSize: 11),
                           ),
@@ -994,7 +997,7 @@ class _InstructorAnnouncementsScreenState
 
     if (posted == true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Announcement posted successfully.'),
           backgroundColor: primaryTeal,
           behavior: SnackBarBehavior.floating,
@@ -1083,18 +1086,22 @@ class _InstructorAnnouncementsScreenState
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: AppColors.background,
+      fillColor: AppColors.resolve(context, AppColors.background),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: AppColors.inputBorder),
+        borderSide: BorderSide(
+          color: AppColors.resolve(context, AppColors.inputBorder),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: AppColors.inputBorder),
+        borderSide: BorderSide(
+          color: AppColors.resolve(context, AppColors.inputBorder),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: primaryTeal, width: 1.5),
+        borderSide: BorderSide(color: primaryTeal, width: 1.5),
       ),
     );
   }

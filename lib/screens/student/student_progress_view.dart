@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
 import '../shared/workspace_widgets.dart';
+import 'student_progress_charts.dart';
 
 class StudentProgressView extends StatelessWidget {
   const StudentProgressView({
@@ -128,11 +129,11 @@ class StudentProgressView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  _completion(context),
+                  StudentProgressCharts(learning: learning),
                 ] else ...[
                   snapshot,
                   const SizedBox(height: 20),
-                  _completion(context),
+                  StudentProgressCharts(learning: learning),
                   const SizedBox(height: 20),
                   _performance(context),
                 ],
@@ -185,131 +186,6 @@ class StudentProgressView extends StatelessWidget {
               );
             },
           ),
-      ],
-    );
-  }
-
-  Widget _completion(BuildContext context) => WorkspaceSurface(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          'Completion breakdown',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Learning activity, separate from your scores.',
-          style: TextStyle(
-            fontSize: 12,
-            color: AppColors.resolve(context, AppColors.secondaryText),
-          ),
-        ),
-        const SizedBox(height: 22),
-        LayoutBuilder(
-          builder: (context, box) {
-            final columns =
-                box.maxWidth >= 720 &&
-                    MediaQuery.textScalerOf(context).scale(14) < 23
-                ? 3
-                : 1;
-            final items = [
-              _completionRow(
-                context,
-                'Modules',
-                'completedModules',
-                'totalModules',
-                'moduleProgress',
-                Icons.menu_book_outlined,
-                AppColors.primaryBlue,
-              ),
-              _completionRow(
-                context,
-                'Assignments',
-                'submittedAssignments',
-                'totalAssignments',
-                'assignmentProgress',
-                Icons.assignment_outlined,
-                AppColors.amber,
-              ),
-              _completionRow(
-                context,
-                'Quizzes',
-                'completedQuizzes',
-                'totalQuizzes',
-                'quizProgress',
-                Icons.quiz_outlined,
-                AppColors.purple,
-              ),
-            ];
-            return Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                for (final item in items)
-                  SizedBox(
-                    width: (box.maxWidth - (columns - 1) * 16) / columns,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.resolve(context, AppColors.background),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: item,
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
-    ),
-  );
-
-  Widget _completionRow(
-    BuildContext context,
-    String title,
-    String doneKey,
-    String totalKey,
-    String ratioKey,
-    IconData icon,
-    Color color,
-  ) {
-    final total = _number(learning, totalKey).toInt();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: AppColors.resolve(context, color), size: 21),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            Text(
-              total == 0 ? '—' : _percent(_ratio(learning, ratioKey)),
-              style: TextStyle(
-                color: AppColors.resolve(context, color),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-        Text(
-          total == 0
-              ? 'None published yet'
-              : '${_number(learning, doneKey).toInt()} of $total completed',
-          style: TextStyle(
-            fontSize: 12,
-            color: AppColors.resolve(context, AppColors.secondaryText),
-          ),
-        ),
-        const SizedBox(height: 9),
-        _bar(context, total == 0 ? null : _ratio(learning, ratioKey), color),
       ],
     );
   }

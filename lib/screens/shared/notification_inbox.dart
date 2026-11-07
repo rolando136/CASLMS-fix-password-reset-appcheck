@@ -225,10 +225,9 @@ class NotificationPreview extends StatelessWidget {
     final localDate = date is Timestamp ? date.toDate().toLocal() : null;
     return Ink(
       decoration: BoxDecoration(
-        color: AppColors.resolve(
-          context,
-          unread ? AppColors.blueTint : Colors.white,
-        ),
+        color: unread
+            ? AppColors.resolve(context, AppColors.blueTint)
+            : Colors.transparent,
         borderRadius: _radius,
         border: Border.all(
           color: unread
@@ -236,7 +235,7 @@ class NotificationPreview extends StatelessWidget {
                     ? Theme.of(context).colorScheme.primary
                           .withValues(alpha: .4)
                     : const Color(0xFFBED4FA)
-              : AppColors.resolve(context, _border),
+              : AppColors.resolve(context, _border).withValues(alpha: .5),
         ),
       ),
       child: Padding(
@@ -437,6 +436,7 @@ class _NotificationInboxScreenState extends State<NotificationInboxScreen> {
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(inset, 0, inset, 8),
                       child: const WorkspaceHeading(
+                        showEyebrow: false,
                         title: 'Your inbox',
                         subtitle: 'Stay up to date with course, activity, and account updates.',
                         eyebrow: 'YOUR UPDATES',
@@ -633,7 +633,7 @@ class _NotificationInboxScreenState extends State<NotificationInboxScreen> {
                             padding: const EdgeInsets.only(bottom: 10),
                             child: Material(
                               key: ValueKey(notice['id']),
-                              color: Colors.white,
+                              color: Colors.transparent,
                               borderRadius: _radius,
                               clipBehavior: Clip.antiAlias,
                               child: InkWell(

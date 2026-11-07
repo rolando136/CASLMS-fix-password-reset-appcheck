@@ -237,6 +237,7 @@ class _ModulesScreenState extends State<ModulesScreen> {
           padding: EdgeInsets.fromLTRB(inset, 0, inset, 28),
           children: [
             const WorkspaceHeading(
+              showEyebrow: false,
               title: 'My courses',
               subtitle: 'Your courses and modules, in one place.',
               eyebrow: 'KEEP EXPLORING',
@@ -272,6 +273,11 @@ class _ModulesScreenState extends State<ModulesScreen> {
                           minHeight: AppTheme.progressBarHeight,
                           borderRadius: BorderRadius.circular(8),
                           semanticsLabel: 'Overall module progress',
+                          color: Theme.of(context).colorScheme.primary,
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: .16),
                         ),
                       ),
                       const SizedBox(width: 14),

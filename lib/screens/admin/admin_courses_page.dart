@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 
 import 'dart:async';
@@ -412,6 +413,7 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(

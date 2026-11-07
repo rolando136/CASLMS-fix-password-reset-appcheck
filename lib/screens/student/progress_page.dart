@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 import '../shared/workspace_shell.dart';
 import '../shared/workspace_widgets.dart';
@@ -146,6 +147,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
       body: SafeArea(
@@ -164,6 +166,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       0,
                     ),
                     child: WorkspaceHeading(
+                      showEyebrow: false,
                       inlineActions: true,
                       title: 'My progress',
                       subtitle: 'See how your learning and academic performance are building over time.',

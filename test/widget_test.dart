@@ -13,6 +13,14 @@ class _SignedOutAuth extends Fake implements CampusAuthService {
 }
 
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+  });
+  tearDown(() {
+    binding.platformDispatcher.clearAccessibilityFeaturesTestValue();
+  });
   testWidgets('CASLMS landing page loads', (WidgetTester tester) async {
     // Exercise the real signed-out gate without requiring live Firebase setup.
     await tester.pumpWidget(
@@ -24,8 +32,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('caslms'), findsOneWidget);
-    expect(find.text('SSU Enhanced\nE-Learning'), findsOneWidget);
-    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text('Learn together.\nGo further.'), findsOneWidget);
+    expect(find.text('Get started'), findsOneWidget);
   });
 
   testWidgets('Landing page survives animated light and dark theme changes', (
@@ -52,9 +60,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.takeException(), isNull);
       await tester.pumpAndSettle();
-      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.text('Get started'), findsOneWidget);
       expect(
-        Theme.of(tester.element(find.text('Get Started'))).brightness,
+        Theme.of(tester.element(find.text('Get started'))).brightness,
         mode == ThemeMode.dark ? Brightness.dark : Brightness.light,
       );
       expect(tester.takeException(), isNull);

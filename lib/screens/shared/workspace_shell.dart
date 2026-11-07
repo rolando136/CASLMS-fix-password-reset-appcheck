@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import '../../core/app_colors.dart';
 import '../../core/theme_notifier.dart';
@@ -37,20 +38,19 @@ const studentDestinations = <WorkspaceDestination>[
   (index: 6, label: 'AI Assistant', icon: Icons.auto_awesome_rounded),
   (index: 1, label: 'Courses', icon: Icons.menu_book_outlined),
   (index: 2, label: 'Tasks', icon: Icons.assignment_outlined),
+  (index: 10, label: 'Calendar', icon: Icons.calendar_month_outlined),
   (index: 3, label: 'Results', icon: Icons.insights_outlined),
   (index: 4, label: 'Profile', icon: Icons.person_outline_rounded),
   (index: 5, label: 'Messages', icon: Icons.chat_bubble_outline_rounded),
-  (index: 9, label: 'Inbox', icon: Icons.notifications_none_rounded),
 ];
 
 const instructorDestinations = <WorkspaceDestination>[
-  (index: 0, label: 'Overview', icon: Icons.space_dashboard_outlined),
-  (index: 1, label: 'Courses', icon: Icons.menu_book_outlined),
-  (index: 2, label: 'Grading', icon: Icons.assignment_outlined),
-  (index: 4, label: 'Profile', icon: Icons.person_outline_rounded),
-  (index: 3, label: 'Analytics', icon: Icons.insights_outlined),
-  (index: 5, label: 'Chat', icon: Icons.chat_bubble_outline_rounded),
-  (index: 6, label: 'AI Assistant', icon: Icons.smart_toy_outlined),
+  (index: 0, label: 'Dashboard', icon: Icons.space_dashboard_outlined),
+  (index: 1, label: 'My Courses', icon: Icons.menu_book_outlined),
+  (index: 2, label: 'Grading', icon: Icons.fact_check_outlined),
+  (index: 7, label: 'Calendar', icon: Icons.calendar_month_outlined),
+  (index: 3, label: 'Insights', icon: Icons.insights_outlined),
+  (index: 5, label: 'Messages', icon: Icons.chat_bubble_outline_rounded),
 ];
 
 /// Layout only: authentication, destination indexes and page state stay with
@@ -85,6 +85,22 @@ class WorkspaceShell extends StatelessWidget {
     builder: (context, box) {
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final desktop = box.maxWidth >= 1100 && scale <= 1.4;
+      if (!desktop) {
+        final inset = workspaceInset(box.maxWidth);
+        return _MobileWorkspaceChrome(
+          selectedIndex: selectedIndex,
+          header: Padding(
+            padding: EdgeInsets.fromLTRB(inset, 10, inset, 12),
+            child: _topBar(context, false),
+          ),
+          navigation: WorkspaceBottomNavigation(
+            destinations: destinations,
+            selectedIndex: selectedIndex,
+            onSelected: onSelected,
+          ),
+          child: child,
+        );
+      }
       return Scaffold(
         backgroundColor: AppColors.resolve(context, AppColors.background),
         bottomNavigationBar: desktop
@@ -138,6 +154,8 @@ class WorkspaceShell extends StatelessWidget {
       if (destination.index == selectedIndex) return destination.label;
     }
     // The bell can open Inbox even in shells that omit its sidebar entry.
+    if (role == 'Instructor' && selectedIndex == profileIndex) return 'Profile';
+    if (role == 'Instructor' && selectedIndex == 6) return 'Teaching AI';
     return selectedIndex == 9 ? 'Inbox' : 'Workspace';
   }
 
@@ -194,6 +212,22 @@ class WorkspaceShell extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (role == 'Instructor')
+                  IconButton(
+                    key: const ValueKey('instructor-assistant-entry'),
+                    tooltip: 'Teaching AI',
+                    onPressed: () => onSelected(6),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 44,
+                      height: 44,
+                    ),
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 21,
+                      color: AppColors.resolve(context, AppColors.link),
+                    ),
+                  ),
                 IconButton(
                   key: const ValueKey('header-theme-button'),
                   visualDensity: desktop
@@ -246,22 +280,58 @@ class WorkspaceShell extends StatelessWidget {
                   width: 1,
                   color: AppColors.resolve(context, AppColors.inputBorder),
                 ),
-                IconButton(
-                  visualDensity: desktop
-                      ? null
-                      : const VisualDensity(horizontal: -2, vertical: -2),
-                  padding: desktop ? null : EdgeInsets.zero,
-                  constraints: desktop
-                      ? null
-                      : const BoxConstraints.tightFor(width: 40, height: 40),
-                  tooltip: 'Logout',
-                  onPressed: onLogout,
-                  icon: Icon(
-                    Icons.logout_rounded,
-                    size: 19,
-                    color: AppColors.resolve(context, AppColors.darkText),
+                if (role == 'Instructor')
+                  PopupMenuButton<String>(
+                    key: const ValueKey('instructor-account-menu'),
+                    tooltip: 'Account and preferences',
+                    icon: const Icon(Icons.account_circle_outlined, size: 21),
+                    onSelected: (value) {
+                      if (value == 'profile') onSelected(profileIndex);
+                      if (value == 'logout') onLogout();
+                      if (value == 'theme') {
+                        ThemeNotifier.instance.setThemeMode(
+                          Theme.of(context).brightness == Brightness.dark
+                              ? ThemeMode.light
+                              : ThemeMode.dark,
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'profile',
+                        child: Text('My profile'),
+                      ),
+                      PopupMenuItem(
+                        value: 'theme',
+                        child: Text(
+                          Theme.of(context).brightness == Brightness.dark
+                              ? 'Use light theme'
+                              : 'Use dark theme',
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'logout',
+                        child: Text('Log out'),
+                      ),
+                    ],
+                  )
+                else
+                  IconButton(
+                    visualDensity: desktop
+                        ? null
+                        : const VisualDensity(horizontal: -2, vertical: -2),
+                    padding: desktop ? null : EdgeInsets.zero,
+                    constraints: desktop
+                        ? null
+                        : const BoxConstraints.tightFor(width: 40, height: 40),
+                    tooltip: 'Logout',
+                    onPressed: onLogout,
+                    icon: Icon(
+                      Icons.logout_rounded,
+                      size: 19,
+                      color: AppColors.resolve(context, AppColors.darkText),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -324,71 +394,6 @@ class WorkspaceShell extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 48),
                   child: Column(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: AppColors.resolve(
-                            context,
-                            AppColors.background,
-                          ),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.auto_awesome_outlined,
-                              color: AppColors.resolve(
-                                context,
-                                AppColors.primaryBlue,
-                              ),
-                              size: 24,
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Keep your curiosity.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Your next great idea starts with a little learning.',
-                              style: TextStyle(
-                                color: AppColors.resolve(
-                                  context,
-                                  AppColors.secondaryText,
-                                ),
-                                fontSize: 12,
-                                height: 1.6,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: () => onSelected(1),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                alignment: Alignment.centerLeft,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      'Explore your workspace',
-                                      style: TextStyle(fontSize: 11),
-                                    ),
-                                  ),
-                                  Icon(Icons.arrow_outward_rounded, size: 12),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
                       const Divider(height: 1),
                       const SizedBox(height: 20),
                       InkWell(
@@ -616,6 +621,124 @@ class _SidebarDestination extends StatelessWidget {
   );
 }
 
+class _MobileWorkspaceChrome extends StatefulWidget {
+  const _MobileWorkspaceChrome({
+    required this.selectedIndex,
+    required this.header,
+    required this.navigation,
+    required this.child,
+  });
+  final int selectedIndex;
+  final Widget header, navigation, child;
+  @override
+  State<_MobileWorkspaceChrome> createState() => _MobileWorkspaceChromeState();
+}
+
+class _MobileWorkspaceChromeState extends State<_MobileWorkspaceChrome>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final CurvedAnimation _visibility;
+  late final Animation<Offset> _headerSlide, _navigationSlide;
+  bool _visible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
+    );
+    _visibility = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOutCubic,
+    );
+    _headerSlide = Tween(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(_visibility);
+    _navigationSlide = Tween(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(_visibility);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileWorkspaceChrome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex) _show(true);
+  }
+
+  void _show(bool visible) {
+    if (_visible == visible) return;
+    setState(() => _visible = visible);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = visible ? 1 : 0;
+    } else if (visible) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  bool _onScroll(UserScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    if (notification.direction == ScrollDirection.reverse) {
+      _show(false);
+    } else if (notification.direction == ScrollDirection.forward) {
+      _show(true);
+    }
+    return false;
+  }
+
+  Widget _bar(Widget child, {bool bottom = false}) => ClipRect(
+    child: SizeTransition(
+      sizeFactor: _visibility,
+      alignment: bottom ? Alignment.bottomCenter : Alignment.topCenter,
+      child: SlideTransition(
+        position: bottom ? _navigationSlide : _headerSlide,
+        child: IgnorePointer(
+          ignoring: !_visible,
+          child: ExcludeFocus(
+            excluding: !_visible,
+            child: ExcludeSemantics(excluding: !_visible, child: child),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    bottomNavigationBar: SafeArea(
+      top: false,
+      child: _bar(widget.navigation, bottom: true),
+    ),
+    body: SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          _bar(widget.header),
+          Expanded(
+            child: NotificationListener<UserScrollNotification>(
+              onNotification: _onScroll,
+              child: widget.child,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  @override
+  void dispose() {
+    _visibility.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+}
+
 class WorkspaceBottomNavigation extends StatelessWidget {
   const WorkspaceBottomNavigation({
     super.key,
@@ -627,12 +750,14 @@ class WorkspaceBottomNavigation extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   bool get _student =>
-      destinations.any((d) => d.index == 9) &&
+      destinations.any((d) => d.index == 10 && d.label == 'Calendar') &&
       destinations.any((d) => d.index == 6) &&
       destinations.any((d) => d.index == 2 && d.label == 'Tasks');
-  List<WorkspaceDestination> get _primary => _student
+  List<WorkspaceDestination> get _primary =>
+      (_student ||
+          destinations.any((d) => d.index == 2 && d.label == 'Grading'))
       ? [
-          for (final index in [0, 1, 6, 2])
+          for (final index in (_student ? [0, 1, 6, 2] : [0, 1, 2, 5]))
             destinations.firstWhere((d) => d.index == index),
         ]
       : destinations.take(4).toList();
@@ -650,43 +775,34 @@ class WorkspaceBottomNavigation extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 560),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(22),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(
-                key: const ValueKey('mobile-navigation'),
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppColors.resolve(
-                    context,
-                    Colors.white,
-                  ).withValues(alpha: .92),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: AppColors.resolve(context, AppColors.inputBorder),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    for (final d in _primary)
-                      _item(
-                        context,
-                        d.index == 6 && _student ? 'AI' : d.label,
-                        d.icon,
-                        selectedIndex == d.index,
-                        () => onSelected(d.index),
-                        ValueKey('nav-${d.index}'),
-                      ),
-                    if (destinations.length > 4)
-                      _item(
-                        context,
-                        'More',
-                        Icons.more_horiz_rounded,
-                        _secondary.any((d) => d.index == selectedIndex),
-                        () => _more(context),
-                        const ValueKey('nav-more'),
-                      ),
-                  ],
-                ),
+            child: Container(
+              key: const ValueKey('mobile-navigation'),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Row(
+                children: [
+                  for (final d in _primary)
+                    _item(
+                      context,
+                      d.index == 6 ? 'AI' : d.label,
+                      d.icon,
+                      selectedIndex == d.index,
+                      () => onSelected(d.index),
+                      ValueKey('nav-${d.index}'),
+                    ),
+                  if (destinations.length > 4)
+                    _item(
+                      context,
+                      'More',
+                      Icons.more_horiz_rounded,
+                      _secondary.any((d) => d.index == selectedIndex),
+                      () => _more(context),
+                      const ValueKey('nav-more'),
+                    ),
+                ],
               ),
             ),
           ),
@@ -715,49 +831,24 @@ class WorkspaceBottomNavigation extends StatelessWidget {
               : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: label == 'AI' && !selected
-                ? BorderSide(
-                    color: AppColors.resolve(context, AppColors.blueTint),
-                    width: 1.2,
-                  )
-                : BorderSide.none,
           ),
           child: InkWell(
             key: key,
             onTap: tap,
             borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 9),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: 23,
-                    color: AppColors.resolve(
-                      context,
-                      selected
-                          ? AppColors.primaryBlue
-                          : AppColors.secondaryText,
-                    ),
+            child: SizedBox(
+              height: 48,
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 23,
+                  color: AppColors.resolve(
+                    context,
+                    selected || label == 'AI'
+                        ? AppColors.primaryBlue
+                        : AppColors.secondaryText,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: AppColors.resolve(
-                        context,
-                        selected
-                            ? AppColors.primaryBlue
-                            : AppColors.secondaryText,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

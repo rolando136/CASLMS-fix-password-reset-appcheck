@@ -16,7 +16,7 @@ import '../../services/enrollment_service.dart';
 import '../../services/progress_service.dart';
 import '../../services/student_roster_service.dart';
 import 'student_ai_quiz_page.dart';
-import 'student_course_banner.dart';
+import '../shared/course_banner.dart';
 import 'student_assessment_submission_page.dart';
 
 class StudentCourseModulesScreen extends StatefulWidget {
@@ -82,14 +82,13 @@ class _StudentCourseModulesScreenState
         'Explain the key ideas and guide me through a practice example.';
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Back to course')),
-          body: LearnerAssistantScreen(
-            role: 'student',
-            initialPrompt: prompt.length > 1400
-                ? prompt.substring(0, 1400)
-                : prompt,
-          ),
+        builder: (_) => LearnerAssistantScreen(
+          role: 'student',
+          showBackButton: true,
+          initialCourseId: widget.courseId,
+          initialPrompt: prompt.length > 1400
+              ? prompt.substring(0, 1400)
+              : prompt,
         ),
       ),
     );
@@ -445,63 +444,20 @@ class _StudentCourseModulesScreenState
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1450),
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(inset, 20, inset, 44),
+                  padding: EdgeInsets.fromLTRB(
+                    inset,
+                    constraints.maxWidth < 700 ? 12 : 20,
+                    inset,
+                    44,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            tooltip: 'Back',
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon: const Icon(Icons.arrow_back_rounded),
-                            color: secondaryText,
-                            padding: EdgeInsets.zero,
-                            visualDensity: const VisualDensity(
-                              horizontal: -2,
-                              vertical: -2,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Refresh course content',
-                            onPressed: _loadCourseContent,
-                            icon: const Icon(Icons.refresh_rounded),
-                            color: secondaryText,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
+                      if (constraints.maxWidth >= 700) ...[
+                        _buildCourseToolbar(),
+                        const SizedBox(height: 4),
+                      ],
                       _buildCourseHeader(),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton.tonalIcon(
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => LiveClassesScreen(
-                                  courseId: widget.courseId,
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.video_call_outlined,
-                              size: 20,
-                            ),
-                            label: const Text('Live classroom'),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: _openAssistant,
-                            icon: const Icon(
-                              Icons.auto_awesome_rounded,
-                              size: 18,
-                            ),
-                            label: const Text('Ask AI'),
-                          ),
-                        ],
-                      ),
                       const SizedBox(height: 20),
                       _buildWorkspaceTabs(),
                       const SizedBox(height: 20),
@@ -584,17 +540,72 @@ class _StudentCourseModulesScreenState
     );
   }
 
+  Widget _buildCourseToolbar() => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      IconButton(
+        tooltip: 'Back',
+        onPressed: () => Navigator.of(context).pop(),
+        icon: const Icon(Icons.arrow_back_rounded),
+        color: secondaryText,
+        padding: EdgeInsets.zero,
+        visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+      ),
+      IconButton(
+        tooltip: 'Refresh course content',
+        onPressed: _loadCourseContent,
+        icon: const Icon(Icons.refresh_rounded),
+        color: secondaryText,
+      ),
+    ],
+  );
+
+  void _openLiveClassroom() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => LiveClassesScreen(courseId: widget.courseId),
+    ),
+  );
+
   Widget _buildCourseHeader() {
-    return StudentCourseBanner(
+    return CourseBanner(
       color: _courseColor,
-      child: WorkspaceHeading(
-        eyebrow: 'COURSE LEARNING WORKSPACE',
-        title: widget.courseTitle,
-        subtitle: [
-          widget.courseCode,
-          if (widget.instructorName.trim().isNotEmpty)
-            'Instructor: ${widget.instructorName}',
-        ].where((part) => part.trim().isNotEmpty).join(' • '),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: WorkspaceEyebrow('COURSE LEARNING WORKSPACE'),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: 'Live classroom',
+                onPressed: _openLiveClassroom,
+                style: IconButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  shape: const CircleBorder(),
+                ),
+                icon: Icon(
+                  Icons.video_call_outlined,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  size: 22,
+                ),
+              ),
+            ],
+          ),
+          WorkspaceHeading(
+            showEyebrow: false,
+            eyebrow: 'COURSE LEARNING WORKSPACE',
+            title: widget.courseTitle,
+            subtitle: [
+              widget.courseCode,
+              if (widget.instructorName.trim().isNotEmpty)
+                'Instructor: ${widget.instructorName}',
+            ].where((part) => part.trim().isNotEmpty).join(' • '),
+          ),
+        ],
       ),
     );
   }

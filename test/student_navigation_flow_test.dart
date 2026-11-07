@@ -68,10 +68,10 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Courses'), findsOneWidget);
-    expect(find.text('AI'), findsOneWidget);
-    expect(find.text('Tasks'), findsOneWidget);
+    for (final label in ['Home', 'Courses', 'AI', 'Tasks']) {
+      expect(find.byTooltip(label), findsOneWidget);
+      expect(find.text(label), findsNothing);
+    }
     await tester.tap(find.byKey(const ValueKey('nav-6')));
     expect(selected, 6);
     await tester.tap(find.byTooltip('More'));

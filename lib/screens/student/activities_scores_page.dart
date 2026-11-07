@@ -83,12 +83,13 @@ class _ActivitiesScoresScreenState extends State<ActivitiesScoresScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               workspaceInset(constraints.maxWidth),
-              20,
+              0,
               workspaceInset(constraints.maxWidth),
               32,
             ),
             children: [
               WorkspaceHeading(
+                showEyebrow: false,
                 inlineActions: true,
                 title: 'Activities & scores',
                 subtitle: 'Find your submissions, check scores, and see what is waiting for feedback.',

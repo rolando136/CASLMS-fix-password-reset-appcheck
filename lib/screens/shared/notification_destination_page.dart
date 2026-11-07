@@ -6,7 +6,7 @@ import '../../services/notification_service.dart';
 import '../../models/notification_target.dart';
 import '../admin/admin_instructor_approvals_page.dart';
 import '../instructor/instructor_assessment_grading_page.dart';
-import '../instructor/instructor_course_sections_page.dart';
+import '../instructor/instructor_class_details_page.dart';
 import '../instructor/instructor_module_detail_page.dart';
 import '../instructor/instructor_chat_page.dart';
 import '../student/student_chat_page.dart';
@@ -215,7 +215,7 @@ class _NotificationDestinationScreenState
           focusResourceId: t.kind == 'moduleResource' ? t.id : '',
         );
       }
-      return InstructorCourseSectionsScreen(courseId: courseId);
+      return InstructorClassDetailsScreen(courseId: courseId);
     }
     // Admins inspect the exact authoritative course without impersonating a student.
     return Scaffold(

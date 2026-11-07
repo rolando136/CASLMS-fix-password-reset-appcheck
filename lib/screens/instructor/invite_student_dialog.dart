@@ -165,11 +165,14 @@ class _InviteStudentDialogState extends State<InviteStudentDialog> {
                           ),
                         ),
                       const SizedBox(height: 12),
-                      const Text(
+                      Text(
                         'Enrollment becomes active when the student accepts. Students in another section must be transferred instead.',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.secondaryText,
+                          color: AppColors.resolve(
+                            context,
+                            AppColors.secondaryText,
+                          ),
                         ),
                       ),
                     ],

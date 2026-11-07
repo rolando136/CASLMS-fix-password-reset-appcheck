@@ -1,3 +1,5 @@
+import '../shared/page_loading_state.dart';
+import '../shared/aligned_page_app_bar.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
 
@@ -460,18 +462,23 @@ class _GeneralQuizScreenState extends State<GeneralQuizScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
 
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1E2841),
-        elevation: 0,
-        foregroundColor: Colors.white,
-        title: Text(
-          _quiz == null
-              ? widget.quizTitle
-              : (_quiz!['title'] ?? widget.quizTitle).toString(),
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      appBar: AlignedPageAppBar(
+        maxWidth: 1000,
+        inset: 24,
+        child: AppBar(
+          backgroundColor: const Color(0xFF1E2841),
+          elevation: 0,
+          foregroundColor: Colors.white,
+          title: Text(
+            _quiz == null
+                ? widget.quizTitle
+                : (_quiz!['title'] ?? widget.quizTitle).toString(),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
         ),
       ),
 
@@ -834,7 +841,10 @@ class _GeneralQuizScreenState extends State<GeneralQuizScreen> {
                     onPressed: _isSubmitting ? null : _previousQuestion,
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(0, 52),
-                      foregroundColor: primaryBlue,
+                      foregroundColor: AppColors.resolve(
+                        context,
+                        AppColors.link,
+                      ),
                     ),
                     child: const Text('Previous'),
                   ),

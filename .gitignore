@@ -33,6 +33,13 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local development artifacts and assistant attachments
+.codex-backups/
+.codex-remote-attachments/
+.serena/
+**/node_modules/
+/android/build/
+
 # Symbolication related
 app.*.symbols
 

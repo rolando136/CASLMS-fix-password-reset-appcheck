@@ -108,7 +108,7 @@ abstract final class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: blue,
+          foregroundColor: AppColors.link,
           side: const BorderSide(color: line),
           shape: shape,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
@@ -118,7 +118,7 @@ abstract final class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: blue,
+          foregroundColor: AppColors.link,
           shape: shape,
           textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
@@ -337,26 +337,16 @@ abstract final class AppTheme {
     );
     return base.copyWith(
       textTheme: text,
-      filledButtonTheme: FilledButtonThemeData(
-        style: base.filledButtonTheme.style?.merge(
-          FilledButton.styleFrom(
-            backgroundColor: DarkAppColors.primaryBlue,
-            foregroundColor: DarkAppColors.background,
-          ),
-        ),
-      ),
+      // Primary calls to action retain the shared blue-and-white brand style.
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: base.outlinedButtonTheme.style?.merge(
-          OutlinedButton.styleFrom(
-            foregroundColor: DarkAppColors.primaryBlue,
-            side: const BorderSide(color: DarkAppColors.inputBorder),
-          ),
-        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: DarkAppColors.link,
+          side: const BorderSide(color: DarkAppColors.inputBorder),
+        ).merge(base.outlinedButtonTheme.style),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: base.textButtonTheme.style?.merge(
-          TextButton.styleFrom(foregroundColor: DarkAppColors.primaryBlue),
-        ),
+        style: TextButton.styleFrom(foregroundColor: DarkAppColors.link)
+            .merge(base.textButtonTheme.style),
       ),
       dataTableTheme: base.dataTableTheme.copyWith(
         headingRowColor: const WidgetStatePropertyAll(DarkAppColors.background),

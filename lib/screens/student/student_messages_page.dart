@@ -147,6 +147,7 @@ class _StudentMessagesScreenState extends State<StudentMessagesScreen> {
       final heading = Padding(
         padding: EdgeInsets.fromLTRB(inset, 0, inset, 20),
         child: const WorkspaceHeading(
+          showEyebrow: false,
           title: 'Messages',
           subtitle: 'Your course conversations, in one place.',
           eyebrow: 'YOUR CONNECTIONS',
@@ -410,14 +411,9 @@ class _StudentMessagesScreenState extends State<StudentMessagesScreen> {
         child: Material(
           elevation: 0,
           shadowColor: Colors.transparent,
-          color: selected
-              ? primaryBlue.withValues(alpha: .09)
-              : Theme.of(context).colorScheme.surface,
+          color: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: BorderSide(
-              color: selected ? primaryBlue.withValues(alpha: .4) : borderColor,
-            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -461,7 +457,7 @@ class _StudentMessagesScreenState extends State<StudentMessagesScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: textDark,
+                                  color: selected ? primaryBlue : textDark,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                 ),

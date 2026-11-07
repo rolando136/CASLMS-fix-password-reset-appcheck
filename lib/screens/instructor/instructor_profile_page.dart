@@ -23,14 +23,14 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
   // CASLMS DESIGN SYSTEM
   // ============================================================
 
-  static const Color primaryTeal = AppColors.primaryBlue;
-  static const Color background = AppColors.background;
-  static const Color textDark = AppColors.darkText;
-  static const Color textGrey = AppColors.secondaryText;
-  static const Color borderColor = AppColors.inputBorder;
-  static const Color blue = AppColors.primaryBlue;
-  static const Color green = AppColors.green;
-  static const Color red = AppColors.error;
+  Color get primaryTeal => AppColors.resolve(context, AppColors.primaryBlue);
+  Color get background => AppColors.resolve(context, AppColors.background);
+  Color get textDark => AppColors.resolve(context, AppColors.darkText);
+  Color get textGrey => AppColors.resolve(context, AppColors.secondaryText);
+  Color get borderColor => AppColors.resolve(context, AppColors.inputBorder);
+  Color get blue => AppColors.resolve(context, AppColors.primaryBlue);
+  Color get green => AppColors.resolve(context, AppColors.green);
+  Color get red => AppColors.resolve(context, AppColors.error);
 
   // ============================================================
   // FIREBASE
@@ -415,7 +415,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text(
+          title: Text(
             'Personal Information',
             style: TextStyle(color: textDark, fontWeight: FontWeight.w700),
           ),
@@ -467,7 +467,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
                   ),
                   child: Text(
                     _facultyId,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: textDark,
                       fontWeight: FontWeight.w600,
                     ),
@@ -604,7 +604,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       builder: (BuildContext sheetContext) {
         return SafeArea(
           child: Padding(
@@ -612,7 +612,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'Account Details',
                   style: TextStyle(
                     color: textDark,
@@ -674,7 +674,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Row(
+          title: Row(
             children: [
               Icon(Icons.lock_reset_rounded, color: primaryTeal),
               SizedBox(width: 10),
@@ -693,7 +693,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'CASLMS will send a secure password reset link to your registered email:',
                 style: TextStyle(color: textGrey, height: 1.45),
               ),
@@ -707,16 +707,12 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.email_outlined,
-                      color: primaryTeal,
-                      size: 20,
-                    ),
+                    Icon(Icons.email_outlined, color: primaryTeal, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         registeredEmail,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: textDark,
                           fontWeight: FontWeight.w700,
                         ),
@@ -726,7 +722,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'The link will work on both web and mobile. Check your spam folder if the email does not appear.',
                 style: TextStyle(color: textGrey, fontSize: 12, height: 1.4),
               ),
@@ -802,11 +798,11 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text(
+          title: Text(
             'Log Out',
             style: TextStyle(color: textDark, fontWeight: FontWeight.w700),
           ),
-          content: const Text(
+          content: Text(
             'Are you sure you want to log out of your CASLMS account?',
             style: TextStyle(color: textGrey, height: 1.45),
           ),
@@ -858,53 +854,29 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
   // ============================================================
 
   @override
-  Widget build(BuildContext context) {
-    return instructorScaffold(
-      context: context,
-      backgroundColor: background,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: background,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'Instructor Profile',
-          style: TextStyle(
-            color: textDark,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _isLoading ? null : _loadProfile,
-            tooltip: 'Refresh Profile',
-            icon: const Icon(Icons.refresh_rounded, color: textDark),
-          ),
-          IconButton(
-            onPressed: _isLoading ? null : _showAccountDetails,
-            tooltip: 'Account Details',
-            icon: const Icon(Icons.settings_outlined, color: textDark),
-          ),
-          const SizedBox(width: 5),
-        ],
+  Widget build(BuildContext context) => instructorScaffold(
+    loading: _isLoading,
+    context: context,
+    title: 'My profile',
+    subtitle: 'Manage your instructor account and preferences.',
+    actions: [
+      IconButton(
+        tooltip: 'Account details',
+        onPressed: _isLoading ? null : _showAccountDetails,
+        icon: const Icon(Icons.settings_outlined),
       ),
-      body: SafeArea(
-        top: false,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child: _buildBody(),
-          ),
-        ),
+      IconButton(
+        tooltip: 'Refresh profile',
+        onPressed: _isLoading ? null : _loadProfile,
+        icon: const Icon(Icons.refresh_rounded),
       ),
-    );
-  }
+    ],
+    body: _buildBody(),
+  );
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: primaryTeal));
+      return Center(child: CircularProgressIndicator(color: primaryTeal));
     }
 
     if (_errorMessage != null) {
@@ -923,16 +895,39 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
           parent: BouncingScrollPhysics(),
         ),
         padding: const EdgeInsets.fromLTRB(24, 18, 24, 40),
-        child: Column(
-          children: [
-            _buildProfileHeader(),
-            const SizedBox(height: 30),
-            _buildStats(),
-            const SizedBox(height: 28),
-            _buildAccountMenu(),
-            const SizedBox(height: 22),
-            _buildLogoutCard(),
-          ],
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final identity = Container(
+              padding: const EdgeInsets.all(24),
+              decoration: _cardDecoration(),
+              child: _buildProfileHeader(),
+            );
+            final settings = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildStats(),
+                const SizedBox(height: 20),
+                _buildAccountMenu(),
+                const SizedBox(height: 20),
+                _buildLogoutCard(),
+              ],
+            );
+            if (box.maxWidth < 850 ||
+                MediaQuery.textScalerOf(context).scale(14) > 21) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [identity, const SizedBox(height: 20), settings],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 4, child: identity),
+                const SizedBox(width: 22),
+                Expanded(flex: 7, child: settings),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -997,7 +992,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
         Text(
           _name,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             color: textDark,
             fontSize: 24,
             fontWeight: FontWeight.w700,
@@ -1008,7 +1003,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
         Text(
           _department,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             color: textGrey,
             fontSize: 14,
             fontWeight: FontWeight.w500,
@@ -1021,7 +1016,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
             color: primaryTeal.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: const Text(
+          child: Text(
             'Samar State University',
             style: TextStyle(
               color: primaryTeal,
@@ -1059,7 +1054,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
       backgroundColor: primaryTeal.withValues(alpha: 0.10),
       child: Text(
         _initials,
-        style: const TextStyle(
+        style: TextStyle(
           color: primaryTeal,
           fontSize: 28,
           fontWeight: FontWeight.w700,
@@ -1180,7 +1175,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
           _buildMenuTile(
             icon: Icons.refresh_rounded,
             title: 'Refresh Profile',
-            subtitle: 'Reload your latest Firebase account data',
+            subtitle: 'Reload your latest account information',
             onTap: _loadProfile,
           ),
         ],
@@ -1191,33 +1186,39 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
   Widget _buildLogoutCard() {
     return Container(
       decoration: _cardDecoration(),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: red.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 7,
           ),
-          child: const Icon(Icons.logout_rounded, color: red, size: 20),
-        ),
-        title: const Text(
-          'Log Out',
-          style: TextStyle(
-            color: red,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: red.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.logout_rounded, color: red, size: 20),
           ),
+          title: Text(
+            'Log Out',
+            style: TextStyle(
+              color: red,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+          subtitle: Text(
+            'Sign out of this instructor account',
+            style: TextStyle(color: textGrey, fontSize: 12),
+          ),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: Color(0xFF9BA4B4),
+          ),
+          onTap: _showLogoutDialog,
         ),
-        subtitle: const Text(
-          'Sign out of this instructor account',
-          style: TextStyle(color: textGrey, fontSize: 12),
-        ),
-        trailing: const Icon(
-          Icons.chevron_right_rounded,
-          color: Color(0xFF9BA4B4),
-        ),
-        onTap: _showLogoutDialog,
       ),
     );
   }
@@ -1251,7 +1252,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: textDark,
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -1261,7 +1262,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: textGrey,
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -1278,38 +1279,41 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: primaryTeal.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: primaryTeal.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: primaryTeal, size: 20),
         ),
-        child: Icon(icon, color: primaryTeal, size: 20),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: textDark,
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
+        title: Text(
+          title,
+          style: TextStyle(
+            color: textDark,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(
-          color: textGrey,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: textGrey,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
         ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: Color(0xFF9BA4B4),
+          size: 20,
+        ),
+        onTap: onTap,
       ),
-      trailing: const Icon(
-        Icons.chevron_right_rounded,
-        color: Color(0xFF9BA4B4),
-        size: 20,
-      ),
-      onTap: onTap,
     );
   }
 
@@ -1332,7 +1336,7 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textGrey,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -1356,10 +1360,10 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
   }
 
   Widget _buildDivider() {
-    return const Divider(
+    return Divider(
       height: 1,
       thickness: 1,
-      color: Color(0xFFF0F2F5),
+      color: borderColor,
       indent: 68,
       endIndent: 20,
     );
@@ -1375,16 +1379,12 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, color: red, size: 50),
+            Icon(Icons.error_outline_rounded, color: red, size: 50),
             const SizedBox(height: 14),
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: textGrey,
-                fontSize: 13,
-                height: 1.45,
-              ),
+              style: TextStyle(color: textGrey, fontSize: 13, height: 1.45),
             ),
             const SizedBox(height: 18),
             ElevatedButton.icon(
@@ -1404,9 +1404,9 @@ class _InstructorProfileScreenState extends State<InstructorProfileScreen> {
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: borderColor, width: 1.5),
+      border: Border.all(color: borderColor),
     );
   }
 

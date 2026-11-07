@@ -62,16 +62,20 @@ class WorkspaceHeading extends StatelessWidget {
     required this.eyebrow,
     this.actions,
     this.inlineActions = false,
+    this.showEyebrow = true,
   });
   final String title;
   final String subtitle;
   final String eyebrow;
   final List<Widget>? actions;
   final bool inlineActions;
+  final bool showEyebrow;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
+      final compact = !showEyebrow && MediaQuery.sizeOf(context).width < 1100;
+      final actionsInline = inlineActions || compact;
       final titleText = Text(
         title,
         style: TextStyle(
@@ -84,15 +88,28 @@ class WorkspaceHeading extends StatelessWidget {
       final heading = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          WorkspaceEyebrow(eyebrow),
-          const SizedBox(height: 10),
-          if (inlineActions && actions != null && actions!.isNotEmpty)
+          if (showEyebrow) ...[
+            WorkspaceEyebrow(eyebrow),
+            const SizedBox(height: 10),
+          ],
+          if (actionsInline && actions != null && actions!.isNotEmpty)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: titleText),
                 const SizedBox(width: 8),
-                Wrap(spacing: 4, children: actions!),
+                IconButtonTheme(
+                  data: IconButtonThemeData(
+                    style: compact
+                        ? IconButton.styleFrom(
+                            minimumSize: const Size(40, 40),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                          )
+                        : null,
+                  ),
+                  child: Wrap(spacing: 4, children: actions!),
+                ),
               ],
             )
           else
@@ -107,7 +124,7 @@ class WorkspaceHeading extends StatelessWidget {
           ),
         ],
       );
-      if (inlineActions || actions == null || actions!.isEmpty) return heading;
+      if (actionsInline || actions == null || actions!.isEmpty) return heading;
       final actionRow = Wrap(
         alignment: WrapAlignment.end,
         spacing: 4,
@@ -612,7 +629,7 @@ class WorkspaceCourseCard extends StatelessWidget {
     builder: (context, constraints) {
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final compact = constraints.maxWidth < 440 * scale;
-      final details = Column(
+      final heading = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -637,6 +654,12 @@ class WorkspaceCourseCard extends StatelessWidget {
               letterSpacing: -.2,
             ),
           ),
+        ],
+      );
+      final details = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          heading,
           const SizedBox(height: 16),
           CourseProgress(course: course, height: progressBarHeight),
         ],
@@ -652,7 +675,7 @@ class WorkspaceCourseCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(compact ? 16 : 20),
             child: compact
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -665,7 +688,9 @@ class WorkspaceCourseCard extends StatelessWidget {
                             background: course.tint,
                             size: 46,
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 12),
+                          Expanded(child: heading),
+                          const SizedBox(width: 8),
                           Icon(
                             Icons.arrow_outward_rounded,
                             size: 19,
@@ -673,8 +698,8 @@ class WorkspaceCourseCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      details,
+                      const SizedBox(height: 14),
+                      CourseProgress(course: course, height: progressBarHeight),
                     ],
                   )
                 : Row(

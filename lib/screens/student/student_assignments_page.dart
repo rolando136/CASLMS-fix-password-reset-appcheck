@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 import '../shared/workspace_shell.dart';
 import '../shared/workspace_widgets.dart';
@@ -748,6 +749,7 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
       body: SafeArea(
@@ -766,6 +768,7 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> {
                       0,
                     ),
                     child: WorkspaceHeading(
+                      showEyebrow: false,
                       title: 'My tasks',
                       subtitle: 'Keep track of what is due and what you have completed.',
                       eyebrow: 'YOUR LEARNING',

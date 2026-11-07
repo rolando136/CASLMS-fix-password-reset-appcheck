@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import '../shared/learner_assistant_page.dart';
 import '../shared/authenticated_workspace.dart';
 import '../shared/workspace_shell.dart';
+import '../shared/calendar_page.dart';
 import 'student_messages_page.dart';
 
 import 'modules_page.dart';
@@ -75,6 +76,7 @@ class _StudentMainScreenState extends State<StudentMainScreen>
       const SizedBox.shrink(),
       const SizedBox.shrink(),
       const NotificationInboxScreen(),
+      const CalendarScreen(role: 'student'),
     ];
 
     _startNotificationPopups();

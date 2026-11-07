@@ -156,7 +156,10 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('1 of 4 activities completed'), findsOneWidget);
           expect(find.text('1.75 / 5 assessed points'), findsOneWidget);
-          expect(find.text('None published yet'), findsOneWidget);
+          expect(find.text('0 / 0'), findsOneWidget);
+          expect(find.text('Completion by type'), findsOneWidget);
+          expect(find.text('Completion breakdown'), findsNothing);
+          expect(find.text('Activity balance'), findsNothing);
           expect(tester.takeException(), isNull);
           await tester.ensureVisible(find.text(courseTitle));
           await tester.pumpAndSettle();

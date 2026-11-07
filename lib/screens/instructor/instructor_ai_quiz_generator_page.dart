@@ -2,7 +2,7 @@ import '../../core/app_colors.dart';
 
 import 'package:flutter/material.dart';
 
-import 'instructor_ui.dart';
+import 'instructor_task_widgets.dart';
 
 class InstructorAIQuizGeneratorScreen extends StatefulWidget {
   const InstructorAIQuizGeneratorScreen({super.key});
@@ -17,11 +17,11 @@ class _InstructorAIQuizGeneratorScreenState
   // ============================================================
   // CASLMS DESIGN SYSTEM (Instructor Teal Palette)
   // ============================================================
-  static const Color primaryTeal = AppColors.primaryBlue;
-  static const Color background = AppColors.background;
-  static const Color textDark = AppColors.darkText;
-  static const Color textGrey = AppColors.secondaryText;
-  static const Color green = AppColors.green;
+  Color get primaryTeal => AppColors.resolve(context, AppColors.primaryBlue);
+  Color get background => AppColors.resolve(context, AppColors.background);
+  Color get textDark => AppColors.resolve(context, AppColors.darkText);
+  Color get textGrey => AppColors.resolve(context, AppColors.secondaryText);
+  Color get green => AppColors.resolve(context, AppColors.green);
 
   String _selectedMaterial = 'Module 1: Intro to Flutter (PDF)';
   int _questionCount = 10;
@@ -32,53 +32,20 @@ class _InstructorAIQuizGeneratorScreenState
 
   @override
   Widget build(BuildContext context) {
-    return instructorScaffold(
-      context: context,
-      backgroundColor: background,
-
-      // ==================================================
-      // STANDARDIZED HEADER
-      // ==================================================
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(60.0),
-        child: AppBar(
-          automaticallyImplyLeading: true,
-          backgroundColor: background,
-          elevation: 0,
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              size: 20,
-              color: textDark,
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'AI Quiz Generator',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: textDark,
-            ),
-          ),
-          actions: const [
-            SizedBox(
-              width: 48,
-            ), // Balances the leading button for center title alignment
-          ],
-        ),
-      ),
+    return InstructorTaskScaffold(
+      title: 'Generate quiz',
+      subtitle: 'Choose the source, difficulty, and number of questions.',
+      busy: _isGenerating,
 
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
             // Expanded to 1200 for wide desktop browsers to match other screens
-            constraints: const BoxConstraints(maxWidth: 1200),
+            constraints: const BoxConstraints(maxWidth: 1080),
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+              padding: InstructorTaskScaffold.paddingOf(context),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -98,7 +65,7 @@ class _InstructorAIQuizGeneratorScreenState
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.auto_awesome_rounded,
                           color: primaryTeal,
                           size: 22,
@@ -108,7 +75,7 @@ class _InstructorAIQuizGeneratorScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'AI Assistant',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
@@ -138,7 +105,7 @@ class _InstructorAIQuizGeneratorScreenState
                   // CONFIGURATION SECTION
                   // ==================================================
                   if (!_isDraftReady && !_isGenerating) ...[
-                    const Text(
+                    Text(
                       '1. Select Source Material',
                       style: TextStyle(
                         fontSize: 16,
@@ -166,7 +133,7 @@ class _InstructorAIQuizGeneratorScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Questions',
                                 style: TextStyle(
                                   fontSize: 14,
@@ -191,7 +158,7 @@ class _InstructorAIQuizGeneratorScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Difficulty',
                                 style: TextStyle(
                                   fontSize: 14,
@@ -236,12 +203,14 @@ class _InstructorAIQuizGeneratorScreenState
                               size: 20,
                             ),
                             SizedBox(width: 8),
-                            Text(
-                              'Generate Draft Quiz',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                            Flexible(
+                              child: Text(
+                                'Generate Draft Quiz',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ],
@@ -259,11 +228,11 @@ class _InstructorAIQuizGeneratorScreenState
                       child: Center(
                         child: Column(
                           children: [
-                            const CircularProgressIndicator(color: primaryTeal),
+                            CircularProgressIndicator(color: primaryTeal),
                             const SizedBox(height: 24),
                             Text(
                               'Analyzing $_selectedMaterial...',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: textDark,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
@@ -272,7 +241,7 @@ class _InstructorAIQuizGeneratorScreenState
                             const SizedBox(height: 6),
                             Text(
                               'Generating $_questionCount $_difficulty questions',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: textGrey,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
@@ -290,7 +259,7 @@ class _InstructorAIQuizGeneratorScreenState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           '2. Review Draft',
                           style: TextStyle(
                             fontSize: 16,
@@ -301,12 +270,12 @@ class _InstructorAIQuizGeneratorScreenState
                         TextButton.icon(
                           onPressed: () =>
                               setState(() => _isDraftReady = false),
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.refresh_rounded,
                             size: 16,
                             color: textGrey,
                           ),
-                          label: const Text(
+                          label: Text(
                             'Discard',
                             style: TextStyle(
                               color: textGrey,
@@ -360,15 +329,14 @@ class _InstructorAIQuizGeneratorScreenState
                           Navigator.pop(context);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .surface,
                           foregroundColor: primaryTeal,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
-                            side: const BorderSide(
-                              color: primaryTeal,
-                              width: 2,
-                            ),
+                            side: BorderSide(color: primaryTeal, width: 2),
                           ),
                         ),
                         child: const Text(
@@ -403,16 +371,19 @@ class _InstructorAIQuizGeneratorScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.inputBorder, width: 1.5),
+        border: Border.all(
+          color: AppColors.resolve(context, AppColors.inputBorder),
+          width: 1.5,
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: textGrey),
-          style: const TextStyle(
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: textGrey),
+          style: TextStyle(
             fontWeight: FontWeight.w700,
             color: textDark,
             fontSize: 13.5,
@@ -445,9 +416,12 @@ class _InstructorAIQuizGeneratorScreenState
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.inputBorder, width: 1.5),
+        border: Border.all(
+          color: AppColors.resolve(context, AppColors.inputBorder),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,7 +440,7 @@ class _InstructorAIQuizGeneratorScreenState
                 ),
                 child: Text(
                   'Q$number',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: primaryTeal,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
@@ -477,7 +451,7 @@ class _InstructorAIQuizGeneratorScreenState
               Expanded(
                 child: Text(
                   question,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 14.5,
                     color: textDark,
@@ -486,7 +460,7 @@ class _InstructorAIQuizGeneratorScreenState
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.edit_rounded, size: 18, color: textGrey),
+                icon: Icon(Icons.edit_rounded, size: 18, color: textGrey),
                 onPressed: () {},
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -502,12 +476,12 @@ class _InstructorAIQuizGeneratorScreenState
               decoration: BoxDecoration(
                 color: isCorrect
                     ? green.withValues(alpha: 0.08)
-                    : AppColors.background,
+                    : AppColors.resolve(context, AppColors.background),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isCorrect
                       ? green.withValues(alpha: 0.4)
-                      : AppColors.inputBorder,
+                      : AppColors.resolve(context, AppColors.inputBorder),
                   width: 1.5,
                 ),
               ),

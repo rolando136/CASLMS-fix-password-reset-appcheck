@@ -1,4 +1,5 @@
 import '../shared/authenticated_workspace.dart';
+import '../shared/calendar_page.dart';
 
 import 'package:flutter/material.dart';
 
@@ -52,6 +53,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
     (7, 'Activity logs', Icons.history_rounded),
     (4, 'Instructor approvals', Icons.how_to_reg_outlined),
     (8, 'Reports', Icons.analytics_outlined),
+    (9, 'Calendar', Icons.calendar_month_outlined),
     (5, 'AI Assistant', Icons.smart_toy_outlined),
     (3, 'Settings', Icons.settings_outlined),
   ];
@@ -82,12 +84,13 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
     6 => const AdminFilesScreen(),
     7 => const AdminActivityLogsScreen(),
     8 => const AdminSystemReportsScreen(),
+    9 => const CalendarScreen(role: 'admin'),
     _ => const SizedBox.shrink(),
   };
   Widget _content() => IndexedStack(
     index: _selectedIndex,
     children: List.generate(
-      9,
+      10,
       (index) =>
           _destinationVisible &&
               _notificationDestination != null &&

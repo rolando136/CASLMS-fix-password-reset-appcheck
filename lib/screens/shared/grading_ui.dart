@@ -70,14 +70,13 @@ class GradeSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
   @override
-  Widget build(BuildContext context) => Container(
-    padding: padding,
-    decoration: BoxDecoration(
-      color: AppColors.resolve(context, Colors.white),
+  Widget build(BuildContext context) => Material(
+    color: AppColors.resolve(context, Colors.white),
+    shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: AppColors.resolve(context, gradeBorder)),
+      side: BorderSide(color: AppColors.resolve(context, gradeBorder)),
     ),
-    child: child,
+    child: Padding(padding: padding, child: child),
   );
 }
 

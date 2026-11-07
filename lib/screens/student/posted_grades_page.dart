@@ -104,12 +104,13 @@ class _PostedGradesScreenState extends State<PostedGradesScreen>
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           workspaceInset(MediaQuery.sizeOf(context).width),
-          20,
+          0,
           workspaceInset(MediaQuery.sizeOf(context).width),
           32,
         ),
         children: [
           WorkspaceHeading(
+            showEyebrow: false,
             inlineActions: true,
             title: 'Posted grades',
             subtitle:

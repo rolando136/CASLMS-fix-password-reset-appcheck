@@ -6,7 +6,7 @@ import 'instructor_ui.dart';
 
 import '../../services/instructor_course_service.dart';
 
-import 'instructor_course_sections_page.dart';
+import 'instructor_class_details_page.dart';
 
 class InstructorCreateCourseScreen extends StatefulWidget {
   const InstructorCreateCourseScreen({super.key});
@@ -18,15 +18,15 @@ class InstructorCreateCourseScreen extends StatefulWidget {
 
 class _InstructorCreateCourseScreenState
     extends State<InstructorCreateCourseScreen> {
-  static const Color primaryTeal = AppColors.primaryBlue;
+  Color get primaryTeal => AppColors.resolve(context, AppColors.primaryBlue);
 
-  static const Color background = AppColors.background;
+  Color get background => AppColors.resolve(context, AppColors.background);
 
-  static const Color textDark = AppColors.darkText;
+  Color get textDark => AppColors.resolve(context, AppColors.darkText);
 
-  static const Color textGrey = AppColors.secondaryText;
+  Color get textGrey => AppColors.resolve(context, AppColors.secondaryText);
 
-  static const Color borderColor = AppColors.inputBorder;
+  Color get borderColor => AppColors.resolve(context, AppColors.inputBorder);
 
   final InstructorCourseService _courseService = InstructorCourseService();
 
@@ -115,7 +115,7 @@ class _InstructorCreateCourseScreenState
 
         MaterialPageRoute(
           builder: (context) =>
-              InstructorCourseSectionsScreen(courseId: courseId),
+              InstructorClassDetailsScreen(courseId: courseId),
         ),
       );
     } on InstructorCourseServiceException catch (e) {
@@ -152,7 +152,7 @@ class _InstructorCreateCourseScreenState
 
         elevation: 0,
 
-        centerTitle: true,
+        centerTitle: false,
 
         leading: IconButton(
           onPressed: _isSaving
@@ -161,7 +161,7 @@ class _InstructorCreateCourseScreenState
                   Navigator.pop(context);
                 },
 
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_ios_new_rounded,
 
             color: textDark,
@@ -170,7 +170,7 @@ class _InstructorCreateCourseScreenState
           ),
         ),
 
-        title: const Text(
+        title: Text(
           'Create New Subject',
 
           style: TextStyle(
@@ -474,12 +474,12 @@ class _InstructorCreateCourseScreenState
       padding: const EdgeInsets.all(16),
 
       decoration: BoxDecoration(
-        color: AppColors.greenTint,
+        color: AppColors.resolve(context, AppColors.greenTint),
 
         borderRadius: BorderRadius.circular(15),
       ),
 
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
@@ -537,26 +537,26 @@ class _InstructorCreateCourseScreenState
 
       filled: true,
 
-      fillColor: Colors.white,
+      fillColor: Theme.of(context).colorScheme.surface,
 
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
 
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
 
-        borderSide: const BorderSide(color: borderColor),
+        borderSide: BorderSide(color: borderColor),
       ),
 
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
 
-        borderSide: const BorderSide(color: borderColor),
+        borderSide: BorderSide(color: borderColor),
       ),
 
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
 
-        borderSide: const BorderSide(color: primaryTeal, width: 1.8),
+        borderSide: BorderSide(color: primaryTeal, width: 1.8),
       ),
     );
   }

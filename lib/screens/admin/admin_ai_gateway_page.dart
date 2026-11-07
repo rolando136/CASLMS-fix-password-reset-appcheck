@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -171,6 +172,7 @@ class _AdminAIGatewayScreenState extends State<AdminAIGatewayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(

@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 
 import 'package:flutter/material.dart';
@@ -227,6 +228,7 @@ class _CodeReviewScreenState extends State<CodeReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
 

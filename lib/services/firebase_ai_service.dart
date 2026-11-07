@@ -856,7 +856,20 @@ Difficulty guidance:
   // DOCX TEXT EXTRACTION
   // ============================================================
 
-  String _extractDocxText(Uint8List bytes) {
+  /// Reuses local Office extraction without constructing a model or sending data.
+  static String extractOfficeAttachment(Uint8List bytes, String extension) {
+    if (bytes.length > 5 * 1024 * 1024) {
+      throw FirebaseAiServiceException('Choose a document smaller than 5 MB.');
+    }
+    return switch (extension.toLowerCase()) {
+      'docx' => _extractDocxText(bytes),
+      'pptx' => _extractPptxText(bytes),
+      'xlsx' => _extractXlsxText(bytes),
+      _ => throw FirebaseAiServiceException('Unsupported document format.'),
+    };
+  }
+
+  static String _extractDocxText(Uint8List bytes) {
     final Archive archive = _decodeOfficeArchive(bytes, 'Word document');
 
     final List<ArchiveFile> files = archive
@@ -912,7 +925,7 @@ Difficulty guidance:
   // PPTX TEXT EXTRACTION
   // ============================================================
 
-  String _extractPptxText(Uint8List bytes) {
+  static String _extractPptxText(Uint8List bytes) {
     final Archive archive = _decodeOfficeArchive(
       bytes,
       'PowerPoint presentation',
@@ -968,7 +981,7 @@ Difficulty guidance:
   // XLSX TEXT EXTRACTION
   // ============================================================
 
-  String _extractXlsxText(Uint8List bytes) {
+  static String _extractXlsxText(Uint8List bytes) {
     final Archive archive = _decodeOfficeArchive(bytes, 'Excel workbook');
 
     final List<String> sharedStrings = _readXlsxSharedStrings(archive);
@@ -1084,7 +1097,7 @@ Difficulty guidance:
     return _normalizeExtractedText(output.toString());
   }
 
-  List<String> _readXlsxSharedStrings(Archive archive) {
+  static List<String> _readXlsxSharedStrings(Archive archive) {
     ArchiveFile? sharedFile;
 
     for (final ArchiveFile file in archive) {
@@ -1131,7 +1144,7 @@ Difficulty guidance:
   // OFFICE ARCHIVE HELPERS
   // ============================================================
 
-  Archive _decodeOfficeArchive(Uint8List bytes, String label) {
+  static Archive _decodeOfficeArchive(Uint8List bytes, String label) {
     try {
       final Archive archive = ZipDecoder().decodeBytes(bytes);
 
@@ -1168,7 +1181,7 @@ Difficulty guidance:
     }
   }
 
-  String _xmlToReadableText(
+  static String _xmlToReadableText(
     String xml, {
     required List<String> paragraphClosingTags,
     required List<String> tabClosingTags,
@@ -1195,7 +1208,7 @@ Difficulty guidance:
     return _normalizeExtractedText(value);
   }
 
-  String _decodeXmlEntities(String value) {
+  static String _decodeXmlEntities(String value) {
     String result = value
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
@@ -1228,7 +1241,7 @@ Difficulty guidance:
     return result;
   }
 
-  String _normalizeExtractedText(String value) {
+  static String _normalizeExtractedText(String value) {
     String text = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
     text = text.replaceAll(RegExp(r'[ \t]+'), ' ');

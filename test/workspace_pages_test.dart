@@ -57,6 +57,14 @@ class _PageApi implements GradebookApi {
 }
 
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+  });
+  tearDown(() {
+    binding.platformDispatcher.clearAccessibilityFeaturesTestValue();
+  });
   testWidgets(
     'Logout dialog wraps, scrolls, and supports cancellation on short screens',
     (tester) async {
@@ -201,9 +209,9 @@ void main() {
           MaterialApp(theme: AppTheme.light, home: const LandingScreen()),
         );
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('Get Started'));
+        await tester.ensureVisible(find.text('Get started'));
         await tester.pumpAndSettle();
-        expect(find.text('Get Started').hitTestable(), findsOneWidget);
+        expect(find.text('Get started').hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }

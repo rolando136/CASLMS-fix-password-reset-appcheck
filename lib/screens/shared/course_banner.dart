@@ -3,12 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 
 /// A decorative course cover; the existing heading owns its typography.
-class StudentCourseBanner extends StatelessWidget {
-  const StudentCourseBanner({
-    super.key,
-    required this.color,
-    required this.child,
-  });
+class CourseBanner extends StatelessWidget {
+  const CourseBanner({super.key, required this.color, required this.child});
 
   final Color color;
   final Widget child;
@@ -55,10 +51,13 @@ class StudentCourseBanner extends StatelessWidget {
                 ),
               ),
               ConstrainedBox(
-                constraints: BoxConstraints(minHeight: compact ? 170 : 200),
+                constraints: BoxConstraints(minHeight: compact ? 144 : 160),
                 child: Padding(
-                  padding: EdgeInsets.all(compact ? 22 : 30),
-                  child: Align(alignment: Alignment.centerLeft, child: child),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 22 : 30,
+                    vertical: compact ? 16 : 20,
+                  ),
+                  child: Align(alignment: Alignment.bottomLeft, child: child),
                 ),
               ),
             ],

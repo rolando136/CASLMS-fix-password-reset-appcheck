@@ -1,7 +1,9 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../services/chat_service.dart';
 import '../shared/chat_message_content.dart';
@@ -17,6 +19,7 @@ class StudentChatScreen extends StatefulWidget {
   final ChatService? chatService;
   final bool embedded;
   final VoidCallback? onClose;
+  final Future<PlatformFile?> Function()? attachmentPicker;
 
   const StudentChatScreen({
     super.key,
@@ -29,6 +32,7 @@ class StudentChatScreen extends StatefulWidget {
     this.chatService,
     this.embedded = false,
     this.onClose,
+    this.attachmentPicker,
   });
 
   @override
@@ -214,6 +218,79 @@ class _StudentChatScreenState extends State<StudentChatScreen> {
   // MARK READ
   // ============================================================
 
+  Future<void> _pickAndSendAttachment() async {
+    if (_isSending || _isInitializing) return;
+    final uid = _chatService.currentUserId;
+    final caption = _messageController.text;
+    setState(() => _isSending = true);
+    try {
+      final file =
+          await (widget.attachmentPicker?.call() ??
+              FilePicker.pickFile(
+                type: FileType.custom,
+                allowedExtensions: const [
+                  'pdf',
+                  'doc',
+                  'docx',
+                  'ppt',
+                  'pptx',
+                  'xls',
+                  'xlsx',
+                  'txt',
+                  'jpg',
+                  'jpeg',
+                  'png',
+                  'gif',
+                  'webp',
+                ],
+              ));
+      if (file == null || !mounted) return;
+      if (await file.length() > ChatService.maximumAttachmentBytes) {
+        throw ChatServiceException(
+          'Chat attachments must be 15 MB or smaller.',
+        );
+      }
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      if (uid == null ||
+          uid != widget.studentId ||
+          _chatService.currentUserId != uid) {
+        throw ChatServiceException(
+          'Your session changed. Reopen the conversation.',
+        );
+      }
+      await _chatService.sendAttachment(
+        courseId: widget.courseId,
+        studentId: widget.studentId,
+        studentName: widget.studentName,
+        instructorId: widget.instructorId,
+        instructorName: widget.instructorName,
+        receiverId: widget.instructorId,
+        fileName: file.name,
+        fileBytes: bytes,
+        caption: caption,
+      );
+      if (!mounted) return;
+      _messageController.clear();
+      _scrollToBottom();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ChatServiceException
+                  ? error.message
+                  : 'Unable to read or send this attachment.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
   Future<void> _markRead() async {
     if (_markingRead) {
       return;
@@ -258,6 +335,7 @@ class _StudentChatScreenState extends State<StudentChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isInitializing && !widget.embedded) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
 
@@ -369,13 +447,14 @@ class _StudentChatScreenState extends State<StudentChatScreen> {
       );
     }
 
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 880),
-        child: Column(
-          children: [
-            Expanded(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 880),
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _messagesStream,
 
@@ -429,11 +508,10 @@ class _StudentChatScreenState extends State<StudentChatScreen> {
                 },
               ),
             ),
-
-            _buildInput(),
-          ],
+          ),
         ),
-      ),
+        _buildInput(),
+      ],
     );
   }
 
@@ -548,64 +626,79 @@ class _StudentChatScreenState extends State<StudentChatScreen> {
 
   Widget _buildInput() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(15, 10, 15, 16),
+      key: const ValueKey('message-composer-surface'),
+      width: double.infinity,
 
       decoration: BoxDecoration(
         color: AppColors.resolve(context, Colors.white),
         border: Border(top: BorderSide(color: borderColor)),
       ),
 
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(15, 10, 15, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
 
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              enabled: !_isSending,
-              minLines: 1,
-              maxLines: 5,
-              decoration: InputDecoration(
-                labelText: 'Message',
-                hintText: 'Write a message...',
-                filled: true,
-                fillColor: background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(22),
-                  borderSide: BorderSide.none,
+              children: [
+                IconButton(
+                  tooltip: 'Attach photo or file',
+                  onPressed: _isSending ? null : _pickAndSendAttachment,
+                  icon: Icon(Icons.attach_file_rounded, color: primaryBlue),
                 ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          Container(
-            decoration: BoxDecoration(
-              color: primaryBlue,
-              shape: BoxShape.circle,
-            ),
-
-            child: IconButton(
-              tooltip: _isSending ? 'Sending message' : 'Send message',
-              onPressed: _isSending ? null : _sendMessage,
-
-              icon: _isSending
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Theme.of(context).colorScheme.onPrimary,
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    enabled: !_isSending,
+                    minLines: 1,
+                    maxLines: 5,
+                    decoration: InputDecoration(
+                      labelText: 'Message',
+                      hintText: 'Write a message...',
+                      filled: true,
+                      fillColor: background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide.none,
                       ),
-                    )
-                  : Icon(
-                      Icons.send_rounded,
-                      color: Theme.of(context).colorScheme.onPrimary,
                     ),
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: primaryBlue,
+                    shape: BoxShape.circle,
+                  ),
+
+                  child: IconButton(
+                    tooltip: _isSending ? 'Sending message' : 'Send message',
+                    onPressed: _isSending ? null : _sendMessage,
+
+                    icon: _isSending
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          )
+                        : Icon(
+                            Icons.send_rounded,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

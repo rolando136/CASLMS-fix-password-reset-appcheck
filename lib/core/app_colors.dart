@@ -9,6 +9,7 @@ abstract final class AppColors {
 
   static final _darkTokens = <Color, Color>{
     Colors.white: DarkAppColors.surface,
+    LightAppColors.link: DarkAppColors.link,
     LightAppColors.primaryBlue: DarkAppColors.primaryBlue,
     LightAppColors.darkText: DarkAppColors.darkText,
     LightAppColors.secondaryText: DarkAppColors.secondaryText,
@@ -26,6 +27,7 @@ abstract final class AppColors {
   };
 
   static const Color primaryBlue = LightAppColors.primaryBlue;
+  static const Color link = LightAppColors.link;
   static const Color darkText = LightAppColors.darkText;
   static const Color secondaryText = LightAppColors.secondaryText;
   static const Color background = LightAppColors.background;
@@ -42,6 +44,7 @@ abstract final class AppColors {
 }
 
 abstract final class LightAppColors {
+  static const Color link = Color(0xFF5267A3);
   static const Color primaryBlue = Color(0xFF4263EB);
   static const Color darkText = Color(0xFF17243F);
   static const Color secondaryText = Color(0xFF7A8498);
@@ -61,6 +64,7 @@ abstract final class LightAppColors {
 }
 
 abstract final class DarkAppColors {
+  static const Color link = Color(0xFFA3B3DF);
   static const Color primaryBlue = Color(0xFF8EA7FF);
   static const Color darkText = Color(0xFFF1F4FA);
   static const Color secondaryText = Color(0xFFB5BDCC);

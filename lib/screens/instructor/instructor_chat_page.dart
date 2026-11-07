@@ -1,8 +1,9 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:flutter/material.dart';
 
 import '../shared/chat_message_content.dart';
@@ -17,6 +18,9 @@ class InstructorChatScreen extends StatefulWidget {
   final String studentEmail;
   final String instructorId;
   final String instructorName;
+  final ChatService? chatService;
+  final bool embedded;
+  final VoidCallback? onClose;
 
   const InstructorChatScreen({
     super.key,
@@ -26,6 +30,9 @@ class InstructorChatScreen extends StatefulWidget {
     required this.studentEmail,
     required this.instructorId,
     required this.instructorName,
+    this.chatService,
+    this.embedded = false,
+    this.onClose,
   });
 
   @override
@@ -37,23 +44,21 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
   // DESIGN SYSTEM
   // ============================================================
 
-  static const Color primaryTeal = AppColors.primaryBlue;
+  Color get primaryTeal => AppColors.resolve(context, AppColors.primaryBlue);
 
-  static const Color background = AppColors.background;
+  Color get background => AppColors.resolve(context, AppColors.background);
 
-  static const Color textDark = AppColors.darkText;
+  Color get textDark => AppColors.resolve(context, AppColors.darkText);
 
-  static const Color textGrey = AppColors.secondaryText;
+  Color get textGrey => AppColors.resolve(context, AppColors.secondaryText);
 
-  static const Color borderColor = AppColors.inputBorder;
+  Color get borderColor => AppColors.resolve(context, AppColors.inputBorder);
 
   // ============================================================
   // SERVICES
   // ============================================================
 
-  final ChatService _chatService = ChatService();
-
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  late final ChatService _chatService = widget.chatService ?? ChatService();
 
   // ============================================================
   // CONTROLLERS
@@ -73,6 +78,12 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
 
   String? _errorMessage;
   String _conversationId = '';
+  late final Stream<List<Map<String, dynamic>>> _messages = _chatService
+      .watchMessages(
+        courseId: widget.courseId,
+        instructorId: widget.instructorId,
+        studentId: widget.studentId,
+      );
 
   // ============================================================
   // INIT
@@ -99,7 +110,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
 
   Future<void> _initializeConversation() async {
     try {
-      final String currentUserId = _auth.currentUser?.uid ?? '';
+      final String currentUserId = _chatService.currentUserId ?? '';
 
       if (currentUserId.isEmpty) {
         throw ChatServiceException('No instructor is currently logged in.');
@@ -348,19 +359,27 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isInitializing && !widget.embedded) return const PageLoadingState();
     return instructorScaffold(
       context: context,
       backgroundColor: background,
 
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         foregroundColor: textDark,
 
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          icon: Icon(
+            widget.embedded ? Icons.close_rounded : Icons.arrow_back_rounded,
+            size: 20,
+          ),
           onPressed: () {
-            Navigator.pop(context);
+            if (widget.embedded) {
+              widget.onClose?.call();
+            } else {
+              Navigator.pop(context);
+            }
           },
         ),
 
@@ -373,7 +392,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
               backgroundColor: primaryTeal.withValues(alpha: 0.10),
               child: Text(
                 _studentInitial,
-                style: const TextStyle(
+                style: TextStyle(
                   color: primaryTeal,
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
@@ -394,7 +413,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
                         : widget.studentName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: textDark,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -406,7 +425,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
                       widget.studentEmail,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: textGrey, fontSize: 10.5),
+                      style: TextStyle(color: textGrey, fontSize: 10.5),
                     ),
                 ],
               ),
@@ -443,7 +462,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
 
   Widget _buildBody() {
     if (_isInitializing) {
-      return const Center(child: CircularProgressIndicator(color: primaryTeal));
+      return Center(child: CircularProgressIndicator(color: primaryTeal));
     }
 
     if (_errorMessage != null) {
@@ -464,10 +483,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: textGrey,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: textGrey, fontWeight: FontWeight.w600),
               ),
 
               const SizedBox(height: 12),
@@ -487,22 +503,17 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
       children: [
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _chatService.watchMessages(
-              courseId: widget.courseId,
-              instructorId: widget.instructorId,
-              studentId: widget.studentId,
-            ),
-
+            stream: _messages,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
-                return const Center(
+                return Center(
                   child: CircularProgressIndicator(color: primaryTeal),
                 );
               }
 
               if (snapshot.hasError) {
-                return const Center(
+                return Center(
                   child: Text(
                     'Unable to load messages.',
                     style: TextStyle(color: textGrey),
@@ -512,7 +523,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
 
               final messages = snapshot.data ?? [];
 
-              final String currentUid = _auth.currentUser?.uid ?? '';
+              final String currentUid = _chatService.currentUserId ?? '';
 
               final bool hasUnread = messages.any((message) {
                 return (message['receiverId'] ?? '').toString() == currentUid &&
@@ -567,11 +578,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
                 color: primaryTeal.withValues(alpha: 0.10),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.forum_outlined,
-                color: primaryTeal,
-                size: 32,
-              ),
+              child: Icon(Icons.forum_outlined, color: primaryTeal, size: 32),
             ),
 
             const SizedBox(height: 15),
@@ -579,7 +586,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
             Text(
               'Start a conversation with ${widget.studentName}',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: textDark,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -588,7 +595,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
 
             const SizedBox(height: 6),
 
-            const Text(
+            Text(
               'Messages are stored in Firestore and update in real time.',
               textAlign: TextAlign.center,
               style: TextStyle(color: textGrey, fontSize: 12, height: 1.5),
@@ -604,7 +611,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
   // ============================================================
 
   Widget _buildMessageBubble(Map<String, dynamic> message) {
-    final String currentUserId = _auth.currentUser?.uid ?? '';
+    final String currentUserId = _chatService.currentUserId ?? '';
 
     final bool isMe = (message['senderId'] ?? '').toString() == currentUserId;
 
@@ -625,7 +632,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
         ),
 
         decoration: BoxDecoration(
-          color: isMe ? primaryTeal : Colors.white,
+          color: isMe ? primaryTeal : Theme.of(context).colorScheme.surface,
 
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(17),
@@ -688,8 +695,8 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
 
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         border: Border(top: BorderSide(color: borderColor)),
       ),
 
@@ -699,7 +706,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
           IconButton(
             tooltip: 'Attach file',
             onPressed: _isSending ? null : _pickAndSendAttachment,
-            icon: const Icon(Icons.attach_file_rounded, color: textGrey),
+            icon: Icon(Icons.attach_file_rounded, color: textGrey),
           ),
 
           Expanded(
@@ -724,7 +731,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
           const SizedBox(width: 8),
 
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: primaryTeal,
               shape: BoxShape.circle,
             ),
@@ -764,7 +771,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Conversation Information',
                   style: TextStyle(
                     color: textDark,
@@ -801,7 +808,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               color: textGrey,
               fontSize: 10.5,
               fontWeight: FontWeight.w600,
@@ -812,7 +819,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
 
           SelectableText(
             value.trim().isEmpty ? 'Not available' : value,
-            style: const TextStyle(
+            style: TextStyle(
               color: textDark,
               fontSize: 12.5,
               fontWeight: FontWeight.w600,

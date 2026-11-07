@@ -1,3 +1,5 @@
+import '../shared/page_loading_state.dart';
+import '../shared/aligned_page_app_bar.dart';
 import '../../core/app_colors.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -236,43 +238,48 @@ class _AssignmentDetailsScreenState extends State<AssignmentDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return Scaffold(
       backgroundColor: background,
 
       // ==========================================================
       // HEADER
       // ==========================================================
-      appBar: AppBar(
-        backgroundColor: background,
-        elevation: 0,
-        foregroundColor: textDark,
+      appBar: AlignedPageAppBar(
+        maxWidth: 1000,
+        inset: 24,
+        child: AppBar(
+          backgroundColor: background,
+          elevation: 0,
+          foregroundColor: textDark,
 
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-
-        title: const Text(
-          'Assignment Details',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: textDark,
-          ),
-        ),
-
-        centerTitle: true,
-
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_horiz_rounded),
-            onPressed: _showMoreOptions,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            onPressed: () {
+              Navigator.pop(context);
+            },
           ),
 
-          const SizedBox(width: 8),
-        ],
+          title: const Text(
+            'Assignment Details',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: textDark,
+            ),
+          ),
+
+          centerTitle: true,
+
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.more_horiz_rounded),
+              onPressed: _showMoreOptions,
+            ),
+
+            const SizedBox(width: 8),
+          ],
+        ),
       ),
 
       body: SafeArea(
@@ -635,7 +642,10 @@ class _AssignmentDetailsScreenState extends State<AssignmentDetailsScreen> {
                     icon: const Icon(Icons.upload_file_rounded),
                     label: const Text('Attach File'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: primaryBlue,
+                      foregroundColor: AppColors.resolve(
+                        context,
+                        AppColors.link,
+                      ),
                       side: const BorderSide(color: Color(0xFFD8E4FF)),
                     ),
                   ),

@@ -1,3 +1,4 @@
+import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
 
@@ -837,6 +838,7 @@ class _StudentAiQuizScreenState extends State<StudentAiQuizScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const PageLoadingState();
     return PopScope<Object?>(
       canPop: !_hasStarted || _hasSubmitted,
       onPopInvokedWithResult: (didPop, result) {

@@ -65,6 +65,22 @@ void main() {
           const Offset(0, -400),
         );
         await tester.pumpAndSettle();
+        if (width < 1100) {
+          expect(button.hitTestable(), findsNothing);
+          expect(
+            find.byKey(const ValueKey('nav-0')).hitTestable(),
+            findsNothing,
+          );
+          await tester.drag(
+            find.byKey(const ValueKey('header-scroll')),
+            const Offset(0, 250),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('nav-0')).hitTestable(),
+            findsOneWidget,
+          );
+        }
         expect(button.hitTestable(), findsOneWidget);
         expect(tester.getTopLeft(button).dy, top);
         expect(

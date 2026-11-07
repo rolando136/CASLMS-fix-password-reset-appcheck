@@ -2,10 +2,17 @@ import '../shared/notification_destination_page.dart';
 
 import 'package:flutter/material.dart';
 
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../services/instructor_workspace_context.dart';
+
 import 'instructor_teaching_assistant_page.dart';
 import '../shared/caslms_help_page.dart';
 import '../shared/authenticated_workspace.dart';
 import '../shared/workspace_shell.dart';
+import '../shared/calendar_page.dart';
 import 'instructor_messages_page.dart';
 
 import 'instructor_dashboard_page.dart';
@@ -23,9 +30,16 @@ class InstructorMainScreen extends StatefulWidget {
 }
 
 class _InstructorMainScreenState extends State<InstructorMainScreen> {
+  StreamSubscription<User?>? _contextAuth;
   @override
   void initState() {
     super.initState();
+    InstructorWorkspaceContext.instance.bindUser(
+      FirebaseAuth.instance.currentUser?.uid,
+    );
+    _contextAuth = FirebaseAuth.instance.authStateChanges().listen((user) {
+      InstructorWorkspaceContext.instance.bindUser(user?.uid);
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -34,6 +48,13 @@ class _InstructorMainScreenState extends State<InstructorMainScreen> {
   }
 
   int _selectedIndex = 0;
+  @override
+  void dispose() {
+    _contextAuth?.cancel();
+    InstructorWorkspaceContext.instance.bindUser(null);
+    super.dispose();
+  }
+
   int _destinationIndex = 0;
   bool _destinationVisible = true;
   final _notificationKey = GlobalKey();
@@ -51,7 +72,7 @@ class _InstructorMainScreenState extends State<InstructorMainScreen> {
             }
           },
         );
-  final Set<int> _openedTabs = <int>{};
+  final Set<int> _openedTabs = <int>{0};
 
   void _onItemTapped(int index) {
     setState(() {
@@ -63,18 +84,15 @@ class _InstructorMainScreenState extends State<InstructorMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = [
-      InstructorDashboardScreen(onNavigateToTab: _onItemTapped),
-      const InstructorClassesScreen(),
-      const InstructorGradingScreen(),
-      const InstructorAnalyticsScreen(),
-      const InstructorProfileScreen(),
-      _openedTabs.contains(5)
-          ? const InstructorMessagesScreen()
-          : const SizedBox.shrink(),
-      _openedTabs.contains(6)
-          ? const InstructorTeachingAssistantScreen()
-          : const SizedBox.shrink(),
+    final List<WidgetBuilder> pages = [
+      (_) => InstructorDashboardScreen(onNavigateToTab: _onItemTapped),
+      (_) => const InstructorClassesScreen(),
+      (_) => const InstructorGradingScreen(),
+      (_) => const InstructorAnalyticsScreen(),
+      (_) => const InstructorProfileScreen(),
+      (_) => const InstructorMessagesScreen(),
+      (_) => const InstructorTeachingAssistantScreen(),
+      (_) => const CalendarScreen(role: 'instructor'),
     ];
 
     return AuthenticatedWorkspace(
@@ -91,7 +109,12 @@ class _InstructorMainScreenState extends State<InstructorMainScreen> {
                   _notificationDestination != null &&
                   index == _destinationIndex
               ? _notificationDestination
-              : pages[index],
+              : TickerMode(
+                  enabled: index == _selectedIndex,
+                  child: _openedTabs.contains(index) || index == _selectedIndex
+                      ? pages[index](context)
+                      : const SizedBox.shrink(),
+                ),
         ),
       ),
     );

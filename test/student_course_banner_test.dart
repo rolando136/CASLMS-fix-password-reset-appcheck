@@ -1,7 +1,7 @@
 import 'package:caslms/core/app_colors.dart';
 import 'package:caslms/core/app_theme.dart';
 import 'package:caslms/screens/shared/workspace_widgets.dart';
-import 'package:caslms/screens/student/student_course_banner.dart';
+import 'package:caslms/screens/shared/course_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,10 +26,7 @@ void main() {
               body: SingleChildScrollView(
                 child: Column(
                   children: [
-                    StudentCourseBanner(
-                      color: course.color,
-                      child: const Text(title),
-                    ),
+                    CourseBanner(color: course.color, child: const Text(title)),
                     WorkspaceCourseCard(course: course, onTap: () {}),
                   ],
                 ),
@@ -44,7 +41,7 @@ void main() {
         final cover = tester.widget<DecoratedBox>(
           find
               .descendant(
-                of: find.byType(StudentCourseBanner),
+                of: find.byType(CourseBanner),
                 matching: find.byType(DecoratedBox),
               )
               .first,
@@ -87,7 +84,7 @@ void main() {
                   padding: EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      StudentCourseBanner(
+                      CourseBanner(
                         color: AppColors.primaryBlue,
                         child: WorkspaceHeading(
                           eyebrow: 'COURSE LEARNING WORKSPACE',
@@ -110,7 +107,12 @@ void main() {
           expect(text.style!.letterSpacing, -1.1);
           expect(text.style!.height, 1.15);
           expect(find.text('IT302 • Instructor: SR JP'), findsOneWidget);
-          final bannerRect = tester.getRect(find.byType(StudentCourseBanner));
+          final bannerRect = tester.getRect(find.byType(CourseBanner));
+          final headingRect = tester.getRect(find.byType(WorkspaceHeading));
+          expect(
+            bannerRect.bottom - headingRect.bottom,
+            closeTo(width - 40 < 700 ? 16 : 20, 1),
+          );
           final contentRect = tester.getRect(find.text('Course content'));
           expect(bannerRect.bottom, lessThanOrEqualTo(contentRect.top));
           expect(tester.takeException(), isNull);

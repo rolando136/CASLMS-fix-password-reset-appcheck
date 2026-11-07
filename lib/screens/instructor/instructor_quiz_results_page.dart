@@ -3,12 +3,13 @@ import '../../core/app_colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import 'instructor_ui.dart';
+import 'instructor_task_widgets.dart';
 
 import '../../services/quiz_service.dart';
 
 class InstructorQuizResultsScreen extends StatefulWidget {
-  const InstructorQuizResultsScreen({super.key});
+  const InstructorQuizResultsScreen({super.key, this.quizService});
+  final QuizService? quizService;
 
   @override
   State<InstructorQuizResultsScreen> createState() =>
@@ -21,23 +22,23 @@ class _InstructorQuizResultsScreenState
   // DESIGN SYSTEM
   // ============================================================
 
-  static const Color primaryTeal = AppColors.primaryBlue;
+  Color get primaryTeal => AppColors.resolve(context, AppColors.primaryBlue);
 
-  static const Color background = AppColors.background;
+  Color get background => AppColors.resolve(context, AppColors.background);
 
-  static const Color textDark = AppColors.darkText;
+  Color get textDark => AppColors.resolve(context, AppColors.darkText);
 
-  static const Color textGrey = AppColors.secondaryText;
+  Color get textGrey => AppColors.resolve(context, AppColors.secondaryText);
 
-  static const Color green = AppColors.green;
+  Color get green => AppColors.resolve(context, AppColors.green);
 
-  static const Color red = AppColors.error;
+  Color get red => AppColors.resolve(context, AppColors.error);
 
   // ============================================================
   // SERVICE
   // ============================================================
 
-  final QuizService _quizService = QuizService();
+  late final QuizService _quizService = widget.quizService ?? QuizService();
 
   // ============================================================
   // STATE
@@ -182,48 +183,17 @@ class _InstructorQuizResultsScreenState
 
   @override
   Widget build(BuildContext context) {
-    return instructorScaffold(
-      context: context,
-      backgroundColor: background,
-
-      // ==========================================================
-      // APP BAR
-      // ==========================================================
-      appBar: AppBar(
-        backgroundColor: background,
-        elevation: 0,
-        centerTitle: true,
-
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: textDark,
-            size: 20,
-          ),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+    return InstructorTaskScaffold(
+      loading: _isLoading,
+      title: 'Quiz results',
+      subtitle: 'Find a student and review their scored quiz attempts.',
+      actions: [
+        IconButton(
+          tooltip: 'Refresh results',
+          onPressed: _isLoading ? null : _loadResults,
+          icon: const Icon(Icons.refresh_rounded),
         ),
-
-        title: const Text(
-          'Quiz Results',
-          style: TextStyle(
-            color: textDark,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh_rounded, color: textDark),
-            onPressed: _loadResults,
-          ),
-
-          const SizedBox(width: 8),
-        ],
-      ),
+      ],
 
       // ==========================================================
       // BODY
@@ -232,7 +202,7 @@ class _InstructorQuizResultsScreenState
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1100),
+            constraints: const BoxConstraints(maxWidth: 1080),
             child: RefreshIndicator(
               color: primaryTeal,
               onRefresh: _loadResults,
@@ -240,34 +210,11 @@ class _InstructorQuizResultsScreenState
                 physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics(),
                 ),
-                padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
+                padding: InstructorTaskScaffold.paddingOf(context),
                 children: [
                   // ==============================================
                   // PAGE INTRO
                   // ==============================================
-
-                  const Text(
-                    'Student Quiz Performance',
-                    style: TextStyle(
-                      color: textDark,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-
-                  const SizedBox(height: 5),
-
-                  const Text(
-                    'View automatically scored quiz attempts from your students.',
-                    style: TextStyle(
-                      color: textGrey,
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
-                  ),
-
-                  const SizedBox(height: 22),
 
                   // ==============================================
                   // SEARCH
@@ -312,25 +259,29 @@ class _InstructorQuizResultsScreenState
 
         hintStyle: const TextStyle(color: Color(0xFFA0A8B7), fontSize: 13),
 
-        prefixIcon: const Icon(Icons.search_rounded, color: primaryTeal),
+        prefixIcon: Icon(Icons.search_rounded, color: primaryTeal),
 
         filled: true,
 
-        fillColor: Colors.white,
+        fillColor: Theme.of(context).colorScheme.surface,
 
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
+          borderSide: BorderSide(
+            color: AppColors.resolve(context, AppColors.inputBorder),
+          ),
         ),
 
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
+          borderSide: BorderSide(
+            color: AppColors.resolve(context, AppColors.inputBorder),
+          ),
         ),
 
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: primaryTeal, width: 1.5),
+          borderSide: BorderSide(color: primaryTeal, width: 1.5),
         ),
       ),
     );
@@ -373,10 +324,12 @@ class _InstructorQuizResultsScreenState
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? primaryTeal : Colors.white,
+          color: selected ? primaryTeal : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? primaryTeal : AppColors.inputBorder,
+            color: selected
+                ? primaryTeal
+                : AppColors.resolve(context, AppColors.inputBorder),
             width: 1.3,
           ),
         ),
@@ -402,7 +355,7 @@ class _InstructorQuizResultsScreenState
     // ------------------------------------------------------------
 
     if (_isLoading) {
-      return const SizedBox(
+      return SizedBox(
         height: 280,
         child: Center(child: CircularProgressIndicator(color: primaryTeal)),
       );
@@ -502,9 +455,12 @@ class _InstructorQuizResultsScreenState
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.inputBorder, width: 1.5),
+        border: Border.all(
+          color: AppColors.resolve(context, AppColors.inputBorder),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,7 +476,7 @@ class _InstructorQuizResultsScreenState
                 backgroundColor: primaryTeal.withValues(alpha: 0.10),
                 child: Text(
                   initial,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: primaryTeal,
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
@@ -536,7 +492,7 @@ class _InstructorQuizResultsScreenState
                   children: [
                     Text(
                       studentName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: textDark,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -548,13 +504,13 @@ class _InstructorQuizResultsScreenState
                         studentEmail,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: textGrey, fontSize: 11),
+                        style: TextStyle(color: textGrey, fontSize: 11),
                       ),
 
                     if (submittedAt != null)
                       Text(
                         'Submitted ${_formatDate(submittedAt)}',
-                        style: const TextStyle(color: textGrey, fontSize: 10.5),
+                        style: TextStyle(color: textGrey, fontSize: 10.5),
                       ),
                   ],
                 ),
@@ -591,7 +547,7 @@ class _InstructorQuizResultsScreenState
           // ======================================================
           Text(
             quizTitle,
-            style: const TextStyle(
+            style: TextStyle(
               color: textDark,
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -602,7 +558,7 @@ class _InstructorQuizResultsScreenState
 
           Text(
             courseCode.isEmpty ? courseTitle : '$courseCode • $courseTitle',
-            style: const TextStyle(
+            style: TextStyle(
               color: primaryTeal,
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -662,7 +618,7 @@ class _InstructorQuizResultsScreenState
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: AppColors.resolve(context, AppColors.background),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -672,7 +628,7 @@ class _InstructorQuizResultsScreenState
 
           const SizedBox(height: 6),
 
-          Text(label, style: const TextStyle(color: textGrey, fontSize: 9.5)),
+          Text(label, style: TextStyle(color: textGrey, fontSize: 9.5)),
 
           const SizedBox(height: 2),
 
@@ -680,7 +636,7 @@ class _InstructorQuizResultsScreenState
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               color: textDark,
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -706,9 +662,11 @@ class _InstructorQuizResultsScreenState
       width: double.infinity,
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.inputBorder),
+        border: Border.all(
+          color: AppColors.resolve(context, AppColors.inputBorder),
+        ),
       ),
       child: Column(
         children: [
@@ -719,7 +677,7 @@ class _InstructorQuizResultsScreenState
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: textDark,
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -731,7 +689,7 @@ class _InstructorQuizResultsScreenState
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: textGrey, fontSize: 12, height: 1.4),
+            style: TextStyle(color: textGrey, fontSize: 12, height: 1.4),
           ),
 
           if (showRetry) ...[
