@@ -18,6 +18,7 @@ import 'student_results_page.dart';
 import 'student_assignments_page.dart';
 import 'student_dashboard_page.dart';
 import 'student_profile_page.dart';
+import 'student_notes_page.dart';
 
 class StudentMainScreen extends StatefulWidget {
   const StudentMainScreen({super.key, this.notificationId});
@@ -77,6 +78,7 @@ class _StudentMainScreenState extends State<StudentMainScreen>
       const SizedBox.shrink(),
       const NotificationInboxScreen(),
       const CalendarScreen(role: 'student'),
+      const StudentNotesScreen(),
     ];
 
     _startNotificationPopups();

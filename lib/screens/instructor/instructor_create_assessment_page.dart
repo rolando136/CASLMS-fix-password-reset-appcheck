@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'instructor_task_widgets.dart';
 
 import '../../services/assessment_service.dart';
+import '../../services/section_audience_service.dart';
+import 'section_audience_picker.dart';
 
 class InstructorCreateAssessmentScreen extends StatefulWidget {
   final String courseId;
@@ -14,6 +16,9 @@ class InstructorCreateAssessmentScreen extends StatefulWidget {
   final String courseTitle;
   final String moduleTitle;
   final AssessmentService? assessmentService;
+  final List<Map<String, dynamic>> sections;
+  final List<String> moduleSectionIds;
+  final String? initialSectionId;
 
   const InstructorCreateAssessmentScreen({
     super.key,
@@ -22,6 +27,9 @@ class InstructorCreateAssessmentScreen extends StatefulWidget {
     required this.courseCode,
     required this.courseTitle,
     required this.moduleTitle,
+    required this.sections,
+    required this.moduleSectionIds,
+    this.initialSectionId,
     this.assessmentService,
   });
 
@@ -72,6 +80,18 @@ class _InstructorCreateAssessmentScreenState
   bool _isSaving = false;
 
   String? _savingStatus;
+  late List<String> _sectionIds;
+
+  @override
+  void initState() {
+    super.initState();
+    final parent = SectionAudienceService.validate(widget.moduleSectionIds);
+    final initial = widget.initialSectionId?.trim() ?? '';
+    _sectionIds =
+        initial.isNotEmpty && SectionAudienceService.allows(parent, initial)
+        ? <String>[initial]
+        : List<String>.from(parent);
+  }
 
   // ============================================================
   // DISPOSE
@@ -169,6 +189,10 @@ class _InstructorCreateAssessmentScreenState
 
       return;
     }
+    if (_sectionIds.isEmpty) {
+      _showError('Choose the sections assigned to this assessment.');
+      return;
+    }
 
     final double? totalPoints = double.tryParse(_pointsController.text.trim());
 
@@ -207,6 +231,7 @@ class _InstructorCreateAssessmentScreenState
             allowedSubmissionTypes: allowedSubmissionTypes,
             totalPoints: totalPoints,
             dueAt: _dueAt!,
+            sectionIds: _sectionIds,
             status: status,
           );
 
@@ -610,6 +635,23 @@ class _InstructorCreateAssessmentScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const Text(
+                        'Assigned sections',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Defaults to the module audience and can only be narrowed.',
+                      ),
+                      SectionAudiencePicker(
+                        sections: widget.sections,
+                        parentAudience: widget.moduleSectionIds,
+                        value: _sectionIds,
+                        enabled: !_isSaving,
+                        onChanged: (value) =>
+                            setState(() => _sectionIds = value),
+                      ),
+                      const Divider(height: 28),
                       TextFormField(
                         controller: _pointsController,
 

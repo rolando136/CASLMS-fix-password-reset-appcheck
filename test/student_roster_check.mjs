@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 // Exercise the real endpoint with isolated auth and storage dependencies.
 const source = readFileSync(new URL('../supabase/functions/assessment-submission/index.ts', import.meta.url), 'utf8');
-const endpoint = source.slice(source.indexOf('async function studentRoster('), source.indexOf('async function publishAiQuiz('));
+const endpoint = source.slice(source.indexOf('async function requireAppCheck('), source.indexOf('async function publishAiQuiz('));
 class RequestError extends Error { constructor(message, status) { super(message); this.status = status; } }
 async function run(overrides = {}) {
   const user = { uid: 'me', profile: { role: 'student' }, ...overrides.user };
@@ -16,6 +16,7 @@ async function run(overrides = {}) {
     RequestError,
     clean: value => String(value ?? '').trim(),
     requireActiveUser: async () => user,
+    firebaseApp: {},
     getAppCheck: () => ({ verifyToken: async () => { if (overrides.badApp) throw Error('invalid'); } }),
     json: value => value,
     firestore: { collection: collection => ({
@@ -28,7 +29,9 @@ async function run(overrides = {}) {
   });
   vm.runInContext(stripTypeScriptTypes(endpoint), context);
   try {
-    const result = await context.studentRoster({ headers: { get: () => overrides.missingApp ? null : 'verified' } }, { courseId: 'course' });
+    const request = { headers: { get: () => overrides.missingApp ? null : 'verified' } };
+    await context.requireAppCheck(request);
+    const result = await context.studentRoster(request, { courseId: 'course' });
     return { result: JSON.parse(JSON.stringify(result)), queried };
   } catch (error) {
     assert.equal(queried, false, 'Denied requests must not query classmates');

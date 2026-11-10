@@ -4,6 +4,7 @@ import '../../core/app_theme.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import 'package:flutter/material.dart';
 
@@ -594,8 +595,12 @@ class _StudentAiQuizScreenState extends State<StudentAiQuizScreen> {
       }
 
       final String? token = await user.getIdToken(true);
+      final appCheck = await FirebaseAppCheck.instance.getToken(true);
 
-      if (token == null || token.isEmpty) {
+      if (token == null ||
+          token.isEmpty ||
+          appCheck == null ||
+          appCheck.isEmpty) {
         throw Exception('Unable to verify your student account.');
       }
 
@@ -618,7 +623,10 @@ class _StudentAiQuizScreenState extends State<StudentAiQuizScreen> {
 
       final response = await sb.Supabase.instance.client.functions.invoke(
         'assessment-submission',
-        headers: <String, String>{'Authorization': 'Bearer $token'},
+        headers: <String, String>{
+          'Authorization': 'Bearer $token',
+          'X-Firebase-AppCheck': appCheck,
+        },
         body: <String, dynamic>{
           'action': 'submit_ai_quiz',
           'assessmentId': widget.assessmentId,

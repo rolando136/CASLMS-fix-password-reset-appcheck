@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
 import '../shared/workspace_widgets.dart';
+import 'student_notes.dart';
 
 /// Production dashboard presentation. All records and actions come from the
 /// authenticated dashboard controller; this widget has no demo data.
@@ -21,6 +22,7 @@ class StudentDashboardView extends StatelessWidget {
     required this.onTasks,
     required this.onInbox,
     required this.onInvitations,
+    required this.onNotes,
     this.pendingInvitations = 0,
     this.summaryError,
     this.onRetry,
@@ -32,7 +34,7 @@ class StudentDashboardView extends StatelessWidget {
   final int activeCourseCount, pendingInvitations;
   final int? assessmentCount, pendingCount, announcementCount;
   final ValueChanged<int> onCourse, onAssessment;
-  final VoidCallback onCourses, onTasks, onInbox, onInvitations;
+  final VoidCallback onCourses, onTasks, onInbox, onInvitations, onNotes;
   final VoidCallback? onRetry;
   final VoidCallback? onAssistant;
   final String? summaryError;
@@ -90,6 +92,8 @@ class StudentDashboardView extends StatelessWidget {
                 onContinue: courses.isEmpty ? onInvitations : () => onCourse(0),
                 onAskAi: onAssistant,
               ),
+              const SizedBox(height: 28),
+              StudentNotesDashboardSection(onOpenNotes: onNotes),
               const SizedBox(height: 28),
               WorkspaceSectionHeading(
                 title: 'My courses',

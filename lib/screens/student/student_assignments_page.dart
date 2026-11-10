@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/student_assessment_query_service.dart';
+import '../../services/section_audience_service.dart';
 
 import 'student_course_modules_page.dart';
 
@@ -188,6 +189,7 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> {
         final String courseId = (enrollment['courseId'] ?? '')
             .toString()
             .trim();
+        final sectionId = (enrollment['sectionId'] ?? '').toString().trim();
 
         if (courseId.isEmpty) {
           continue;
@@ -223,6 +225,14 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> {
             await _firestore
                 .collection('modules')
                 .where('courseId', isEqualTo: courseId)
+                .where('status', isEqualTo: 'published')
+                .where(
+                  'sectionIds',
+                  arrayContainsAny: <String>[
+                    SectionAudienceService.allSections,
+                    sectionId,
+                  ],
+                )
                 .get();
 
         final Map<String, Map<String, dynamic>> publishedModules = {};

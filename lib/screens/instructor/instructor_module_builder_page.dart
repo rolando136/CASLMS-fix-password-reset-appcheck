@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 import 'instructor_task_widgets.dart';
 
 import '../../services/module_service.dart';
+import 'section_audience_picker.dart';
 
 class InstructorModuleBuilderScreen extends StatefulWidget {
   final String courseId;
   final String courseCode;
   final String courseTitle;
   final ModuleService? moduleService;
+  final String? initialSectionId;
+  final List<String>? initialSectionIds;
+  final List<Map<String, dynamic>> sections;
 
   const InstructorModuleBuilderScreen({
     super.key,
@@ -18,6 +22,9 @@ class InstructorModuleBuilderScreen extends StatefulWidget {
     this.courseCode = '',
     this.courseTitle = '',
     this.moduleService,
+    this.initialSectionId,
+    this.initialSectionIds,
+    required this.sections,
   });
 
   @override
@@ -55,6 +62,8 @@ class _InstructorModuleBuilderScreenState
   bool _publishImmediately = true;
 
   String? _errorMessage;
+  List<Map<String, dynamic>> _sections = const [];
+  List<String> _sectionIds = const [];
 
   @override
   void initState() {
@@ -84,6 +93,9 @@ class _InstructorModuleBuilderScreenState
       final int nextOrder = await _moduleService.getNextModuleOrder(
         courseId: courseId,
       );
+      final sections = widget.sections
+          .where((section) => section['status'] == 'active')
+          .toList();
 
       if (!mounted) {
         return;
@@ -91,8 +103,16 @@ class _InstructorModuleBuilderScreenState
 
       _orderController.text = '$nextOrder';
 
+      final requested = widget.initialSectionId?.trim() ?? '';
+
       setState(() {
         _isPreparing = false;
+        _sections = sections;
+        _sectionIds =
+            widget.initialSectionIds ??
+            (sections.any((section) => section['id'] == requested)
+                ? <String>[requested]
+                : const <String>[]);
       });
     } on ModuleServiceException catch (e) {
       if (!mounted) {
@@ -136,6 +156,12 @@ class _InstructorModuleBuilderScreenState
 
       return;
     }
+    if (_sectionIds.isEmpty) {
+      setState(() {
+        _errorMessage = 'Choose the sections assigned to this module.';
+      });
+      return;
+    }
 
     setState(() {
       _isSaving = true;
@@ -151,6 +177,8 @@ class _InstructorModuleBuilderScreenState
         description: _descriptionController.text,
 
         order: order,
+
+        sectionIds: _sectionIds,
 
         status: _publishImmediately ? 'published' : 'draft',
       );
@@ -195,7 +223,7 @@ class _InstructorModuleBuilderScreenState
   Widget build(BuildContext context) => InstructorTaskScaffold(
     loading: _isPreparing,
     title: 'Create module',
-    subtitle: 'Create shared learning content for all sections of this course.',
+    subtitle: 'Create learning content and assign its student audience.',
     contextLabel: [
       widget.courseCode,
       widget.courseTitle,
@@ -281,6 +309,23 @@ class _InstructorModuleBuilderScreenState
                   validator: (v) => (int.tryParse(v ?? '') ?? 0) <= 0
                       ? 'Enter a valid module order.'
                       : null,
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Assigned sections',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'This controls who can access the module. It is separate from the section currently being viewed.',
+                  style: TextStyle(fontSize: 12, height: 1.5, color: textGrey),
+                ),
+                const SizedBox(height: 8),
+                SectionAudiencePicker(
+                  sections: _sections,
+                  value: _sectionIds,
+                  enabled: !_isSaving,
+                  onChanged: (value) => setState(() => _sectionIds = value),
                 ),
                 const SizedBox(height: 18),
                 Row(

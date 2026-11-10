@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
 
 import '../config/supabase_config.dart';
 import 'assistant_pdf_text.dart';
@@ -164,10 +164,16 @@ class AssistantAttachmentService {
           'This material cannot be attached. Choose a document smaller than 5 MB.',
         );
       }
-      final bytes = await Supabase.instance.client.storage
-          .from(SupabaseConfig.learningMaterialsBucket)
-          .download((row['storagePath'] ?? '').toString())
-          .timeout(const Duration(seconds: 25));
+      final uri = await LearningMaterialService().createAuthorizedDownloadUri(
+        resourceId,
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 25));
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'The protected material could not be downloaded.',
+        );
+      }
+      final bytes = response.bodyBytes;
       attachment = await fromBytes((row['fileName'] ?? name).toString(), bytes);
     }
     if (uid == null || FirebaseAuth.instance.currentUser?.uid != uid) {

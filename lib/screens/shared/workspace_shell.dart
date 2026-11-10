@@ -38,6 +38,7 @@ const studentDestinations = <WorkspaceDestination>[
   (index: 6, label: 'AI Assistant', icon: Icons.auto_awesome_rounded),
   (index: 1, label: 'Courses', icon: Icons.menu_book_outlined),
   (index: 2, label: 'Tasks', icon: Icons.assignment_outlined),
+  (index: 11, label: 'Notes', icon: Icons.note_alt_outlined),
   (index: 10, label: 'Calendar', icon: Icons.calendar_month_outlined),
   (index: 3, label: 'Results', icon: Icons.insights_outlined),
   (index: 4, label: 'Profile', icon: Icons.person_outline_rounded),

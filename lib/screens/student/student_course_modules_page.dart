@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_colors.dart';
@@ -14,6 +13,8 @@ import '../shared/live_classes_page.dart';
 import '../../services/assessment_submission_service.dart';
 import '../../services/enrollment_service.dart';
 import '../../services/progress_service.dart';
+import '../../services/section_audience_service.dart';
+import '../../services/learning_material_service.dart';
 import '../../services/student_roster_service.dart';
 import 'student_ai_quiz_page.dart';
 import '../shared/course_banner.dart';
@@ -286,6 +287,14 @@ class _StudentCourseModulesScreenState
       final modulesSnapshot = await _firestore
           .collection('modules')
           .where('courseId', isEqualTo: widget.courseId)
+          .where('status', isEqualTo: 'published')
+          .where(
+            'sectionIds',
+            arrayContainsAny: <String>[
+              SectionAudienceService.allSections,
+              sectionId,
+            ],
+          )
           .get();
 
       final assessmentSnapshots = await Future.wait(
@@ -294,12 +303,26 @@ class _StudentCourseModulesScreenState
               .collection('assessments')
               .where('courseId', isEqualTo: widget.courseId)
               .where('status', whereIn: const ['published', 'closed'])
+              .where(
+                'sectionIds',
+                arrayContainsAny: <String>[
+                  SectionAudienceService.allSections,
+                  sectionId,
+                ],
+              )
               .where('sectionId', isEqualTo: ''),
           if (sectionId.isNotEmpty)
             _firestore
                 .collection('assessments')
                 .where('courseId', isEqualTo: widget.courseId)
                 .where('status', whereIn: const ['published', 'closed'])
+                .where(
+                  'sectionIds',
+                  arrayContainsAny: <String>[
+                    SectionAudienceService.allSections,
+                    sectionId,
+                  ],
+                )
                 .where('sectionId', isEqualTo: sectionId),
         ].map((query) => query.get()),
       );
@@ -331,6 +354,13 @@ class _StudentCourseModulesScreenState
             .collection('moduleResources')
             .where('moduleId', isEqualTo: moduleDoc.id)
             .where('status', isEqualTo: 'published')
+            .where(
+              'sectionIds',
+              arrayContainsAny: <String>[
+                SectionAudienceService.allSections,
+                sectionId,
+              ],
+            )
             .get();
 
         final resources = <Map<String, dynamic>>[];
@@ -799,19 +829,19 @@ class _StudentCourseModulesScreenState
       final status = (submission['status'] ?? '').toString().toLowerCase();
       return status == 'graded' || submission['score'] is num;
     }).toList();
-    final earned = graded.fold<double>(0, (sum, assessment) {
+    final earned = graded.fold<double>(0, (total, assessment) {
       final submission = assessment['studentSubmission'];
-      return sum +
+      return total +
           ((submission is Map && submission['score'] is num)
               ? (submission['score'] as num).toDouble()
               : 0);
     });
-    final possible = graded.fold<double>(0, (sum, assessment) {
+    final possible = graded.fold<double>(0, (total, assessment) {
       final submission = assessment['studentSubmission'];
       final value = submission is Map && submission['totalPoints'] is num
           ? submission['totalPoints']
           : assessment['totalPoints'];
-      return sum + (value is num ? value.toDouble() : 0);
+      return total + (value is num ? value.toDouble() : 0);
     });
     final percent = possible > 0 ? earned / possible * 100 : null;
     return Column(
@@ -1658,21 +1688,9 @@ class _StudentCourseModulesScreenState
         final url = (resource['externalUrl'] ?? '').toString().trim();
         uri = Uri.tryParse(url);
       } else if (deliveryType == 'uploaded_file') {
-        final fileUrl = (resource['fileUrl'] ?? '').toString().trim();
-        if (fileUrl.isNotEmpty) {
-          uri = Uri.tryParse(fileUrl);
-        }
-        if ((uri == null || !uri.hasScheme) &&
-            (resource['storageBucket'] ?? '').toString().trim().isNotEmpty &&
-            (resource['storagePath'] ?? '').toString().trim().isNotEmpty) {
-          final bucket = (resource['storageBucket'] ?? '').toString().trim();
-          final storagePath = (resource['storagePath'] ?? '').toString().trim();
-          uri = Uri.tryParse(
-            Supabase.instance.client.storage
-                .from(bucket)
-                .getPublicUrl(storagePath),
-          );
-        }
+        uri = await LearningMaterialService().createAuthorizedDownloadUri(
+          (resource['id'] ?? resource['resourceId'] ?? '').toString(),
+        );
       } else {
         final url = (resource['externalUrl'] ?? resource['fileUrl'] ?? '')
             .toString()

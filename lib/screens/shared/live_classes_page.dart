@@ -5,8 +5,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/live_class_service.dart';
+import '../../services/meeting_chat_service.dart';
 import 'live_classroom_embed.dart';
 import 'grading_ui.dart';
+import 'meeting_chat_panel.dart';
 
 class LiveClassesScreen extends StatefulWidget {
   const LiveClassesScreen({super.key, required this.courseId, this.sectionId});
@@ -742,15 +744,105 @@ class _LiveRoomScreen extends StatefulWidget {
 
 class _LiveRoomScreenState extends State<_LiveRoomScreen> {
   final _service = LiveClassService();
+  final _chatService = MeetingChatService();
   Timer? _poll;
+  StreamSubscription<List<MeetingChatMessage>>? _chatSubscription;
+  late final String _sessionId;
+  late final String _liveClassId;
+  late final Stream<List<MeetingChatMessage>> _chatMessages;
   bool _ending = false;
   bool _checking = false;
   bool _leaving = false;
+  bool _desktopChatOpen = false;
+  bool _mobileChatVisible = false;
+  bool _chatLayoutInitialized = false;
+  bool _chatBaselineLoaded = false;
+  String? _latestMessageId;
+  int _unreadMessages = 0;
 
   @override
   void initState() {
     super.initState();
+    _sessionId = (widget.connection['sessionId'] ?? '').toString();
+    _liveClassId = (widget.connection['liveClassId'] ?? '').toString();
+    _chatMessages = _chatService
+        .watchMessages(
+          liveClassId: _liveClassId,
+          courseId: widget.courseId,
+          sectionId: widget.sectionId,
+          sessionId: _sessionId,
+        )
+        .asBroadcastStream();
+    _chatSubscription = _chatMessages.listen(
+      _trackUnreadMessages,
+      onError: (Object _) {},
+    );
     _poll = Timer.periodic(const Duration(seconds: 20), (_) => _check());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_chatLayoutInitialized) {
+      _desktopChatOpen = MediaQuery.sizeOf(context).width >= 900;
+      _chatLayoutInitialized = true;
+    }
+  }
+
+  void _trackUnreadMessages(List<MeetingChatMessage> messages) {
+    if (!_chatBaselineLoaded) {
+      _chatBaselineLoaded = true;
+      _latestMessageId = messages.isEmpty ? null : messages.last.id;
+      return;
+    }
+    if (messages.isEmpty || messages.last.id == _latestMessageId) return;
+
+    final previousIndex = _latestMessageId == null
+        ? -1
+        : messages.indexWhere((message) => message.id == _latestMessageId);
+    final newMessages = messages
+        .skip(previousIndex + 1)
+        .where((message) => !message.isMine(_chatService.currentUserId));
+    _latestMessageId = messages.last.id;
+    if (!mounted || _desktopChatOpen || _mobileChatVisible) return;
+    final count = newMessages.length;
+    if (count > 0) {
+      setState(() => _unreadMessages += count);
+    }
+  }
+
+  void _setDesktopChat(bool open) {
+    setState(() {
+      _desktopChatOpen = open;
+      if (open) _unreadMessages = 0;
+    });
+  }
+
+  Future<void> _showMobileChat() async {
+    if (_mobileChatVisible || !mounted) return;
+    setState(() {
+      _mobileChatVisible = true;
+      _unreadMessages = 0;
+    });
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF101A2D),
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: .82,
+        child: MeetingChatPanel(
+          service: _chatService,
+          messages: _chatMessages,
+          liveClassId: _liveClassId,
+          courseId: widget.courseId,
+          sectionId: widget.sectionId,
+          sessionId: _sessionId,
+          onClose: () => Navigator.of(sheetContext).pop(),
+        ),
+      ),
+    );
+    if (mounted) setState(() => _mobileChatVisible = false);
   }
 
   Future<void> _check() async {
@@ -780,6 +872,7 @@ class _LiveRoomScreenState extends State<_LiveRoomScreen> {
   @override
   void dispose() {
     _poll?.cancel();
+    _chatSubscription?.cancel();
     super.dispose();
   }
 
@@ -803,7 +896,7 @@ class _LiveRoomScreenState extends State<_LiveRoomScreen> {
         action: 'end',
         courseId: widget.courseId,
         sectionId: widget.sectionId,
-        sessionId: widget.connection['sessionId'] as String,
+        sessionId: _sessionId,
       );
       _leave();
     } catch (error) {
@@ -817,55 +910,114 @@ class _LiveRoomScreenState extends State<_LiveRoomScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.resolve(context, AppColors.darkText),
-    appBar: AppBar(
-      backgroundColor: const Color(0xFF101A2D),
-      foregroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      leading: IconButton(
-        tooltip: 'Back to Live Classes',
-        onPressed: _leave,
-        icon: const Icon(Icons.arrow_back_rounded),
-      ),
-      title: const Text(
-        'Live classroom',
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-      ),
-      actions: [
-        if (widget.connection['instructor'] == true)
+  Widget build(BuildContext context) {
+    final desktop = MediaQuery.sizeOf(context).width >= 900;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Scaffold(
+      backgroundColor: AppColors.resolve(context, AppColors.darkText),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF101A2D),
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          tooltip: 'Back to Live Classes',
+          onPressed: _leave,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: const Text(
+          'Live classroom',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        actions: [
+          IconButton(
+            tooltip: desktop && _desktopChatOpen
+                ? 'Close meeting chat'
+                : 'Open meeting chat',
+            onPressed: desktop
+                ? () => _setDesktopChat(!_desktopChatOpen)
+                : _showMobileChat,
+            icon: Badge(
+              isLabelVisible:
+                  _unreadMessages > 0 &&
+                  !(desktop ? _desktopChatOpen : _mobileChatVisible),
+              label: Text(_unreadMessages > 99 ? '99+' : '$_unreadMessages'),
+              child: Icon(
+                desktop && _desktopChatOpen
+                    ? Icons.forum_rounded
+                    : Icons.forum_outlined,
+              ),
+            ),
+          ),
+          if (widget.connection['instructor'] == true)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: RoundGradeAction(
+                icon: Icons.stop_circle_outlined,
+                label: _ending ? 'Ending class...' : 'End class for everyone',
+                accent: const Color(0xFFFF8797),
+                onTap: _ending ? null : _end,
+              ),
+            ),
           Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: RoundGradeAction(
-              icon: Icons.stop_circle_outlined,
-              label: _ending ? 'Ending class...' : 'End class for everyone',
-              accent: const Color(0xFFFF8797),
-              onTap: _ending ? null : _end,
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFCBDAEF),
+              ),
+              onPressed: _leave,
+              icon: const Icon(Icons.logout_rounded, size: 18),
+              label: const Text('Leave'),
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: TextButton.icon(
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFCBDAEF),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_ending) const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final chatWidth = desktop && _desktopChatOpen
+                    ? (constraints.maxWidth * .32).clamp(320.0, 390.0)
+                    : 0.0;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: LiveClassroomEmbed(
+                        connection: widget.connection,
+                        onLeave: _leave,
+                      ),
+                    ),
+                    AnimatedContainer(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      width: chatWidth,
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          left: BorderSide(color: Color(0xFF26354D)),
+                        ),
+                      ),
+                      child: chatWidth == 0
+                          ? const SizedBox.shrink()
+                          : MeetingChatPanel(
+                              service: _chatService,
+                              messages: _chatMessages,
+                              liveClassId: _liveClassId,
+                              courseId: widget.courseId,
+                              sectionId: widget.sectionId,
+                              sessionId: _sessionId,
+                              onClose: () => _setDesktopChat(false),
+                            ),
+                    ),
+                  ],
+                );
+              },
             ),
-            onPressed: _leave,
-            icon: const Icon(Icons.logout_rounded, size: 18),
-            label: const Text('Leave'),
           ),
-        ),
-      ],
-    ),
-    body: Column(
-      children: [
-        if (_ending) const LinearProgressIndicator(minHeight: 2),
-        Expanded(
-          child: LiveClassroomEmbed(
-            connection: widget.connection,
-            onLeave: _leave,
-          ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

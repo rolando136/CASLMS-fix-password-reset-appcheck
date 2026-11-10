@@ -8,18 +8,26 @@ import 'package:flutter/material.dart';
 import 'instructor_task_widgets.dart';
 
 import '../../services/learning_material_service.dart';
+import '../../services/section_audience_service.dart';
+import 'section_audience_picker.dart';
 
 class InstructorAddLearningMaterialScreen extends StatefulWidget {
   final String courseId;
   final String moduleId;
   final String moduleTitle;
   final LearningMaterialService? materialService;
+  final List<Map<String, dynamic>> sections;
+  final List<String> moduleSectionIds;
+  final String? initialSectionId;
 
   const InstructorAddLearningMaterialScreen({
     super.key,
     required this.courseId,
     required this.moduleId,
     required this.moduleTitle,
+    required this.sections,
+    required this.moduleSectionIds,
+    this.initialSectionId,
     this.materialService,
   });
 
@@ -78,6 +86,18 @@ class _InstructorAddLearningMaterialScreenState
   PlatformFile? _selectedFile;
 
   Uint8List? _selectedFileBytes;
+  late List<String> _sectionIds;
+
+  @override
+  void initState() {
+    super.initState();
+    final parent = SectionAudienceService.validate(widget.moduleSectionIds);
+    final initial = widget.initialSectionId?.trim() ?? '';
+    _sectionIds =
+        initial.isNotEmpty && SectionAudienceService.allows(parent, initial)
+        ? <String>[initial]
+        : List<String>.from(parent);
+  }
 
   // ============================================================
   // DISPOSE
@@ -294,6 +314,10 @@ class _InstructorAddLearningMaterialScreenState
         return;
       }
     }
+    if (_sectionIds.isEmpty) {
+      _showError('Choose the sections assigned to this material.');
+      return;
+    }
 
     FocusScope.of(context).unfocus();
 
@@ -314,6 +338,7 @@ class _InstructorAddLearningMaterialScreenState
           description: _descriptionController.text,
           fileName: _selectedFile!.name,
           fileBytes: _selectedFileBytes!,
+          sectionIds: _sectionIds,
           status: _status,
         );
       }
@@ -327,6 +352,7 @@ class _InstructorAddLearningMaterialScreenState
           title: _titleController.text,
           description: _descriptionController.text,
           url: _urlController.text,
+          sectionIds: _sectionIds,
           resourceType: _linkType,
           status: _status,
         );
@@ -557,7 +583,28 @@ class _InstructorAddLearningMaterialScreenState
           ),
           secondary: InstructorFormSection(
             title: 'Visibility',
-            child: _buildStatusSection(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Assigned sections',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Defaults to the module audience and can only be narrowed.',
+                ),
+                SectionAudiencePicker(
+                  sections: widget.sections,
+                  parentAudience: widget.moduleSectionIds,
+                  value: _sectionIds,
+                  enabled: !_isSaving,
+                  onChanged: (value) => setState(() => _sectionIds = value),
+                ),
+                const Divider(height: 28),
+                _buildStatusSection(),
+              ],
+            ),
           ),
         ),
       ),

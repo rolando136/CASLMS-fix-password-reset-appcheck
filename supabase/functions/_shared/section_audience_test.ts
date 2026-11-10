@@ -140,3 +140,84 @@ Deno.test("only active owned-course sections can be assigned", () => {
   rejects(() => assertActiveSections(["missing"], "course", sections));
   rejects(() => assertActiveSections(["4c"], "other", sections));
 });
+
+Deno.test("one section and a narrowed child remain accessible", () => {
+  assert(
+    canAccessSectionContent({
+      ...base,
+      module: { ...base.module, sectionIds: ["4c", "4d"] },
+      child: {
+        courseId: "course",
+        moduleId: "module",
+        status: "published",
+        sectionIds: ["4c"],
+      },
+    }),
+    "narrow child should remain visible to 4C",
+  );
+});
+
+Deno.test("draft children, removed accounts and stale identities fail closed", () => {
+  const child = {
+    courseId: "course",
+    moduleId: "module",
+    status: "draft",
+    sectionIds: ["4c"],
+  };
+  assert(!canAccessSectionContent({ ...base, child }), "draft child");
+  assert(
+    !canAccessSectionContent({
+      ...base,
+      studentId: "replacement-account",
+    }),
+    "identity mismatch",
+  );
+  assert(
+    !canAccessSectionContent({
+      ...base,
+      enrollment: { ...base.enrollment, status: "removed" },
+      child: { ...child, status: "published" },
+    }),
+    "removed enrollment",
+  );
+});
+
+Deno.test("audience parser rejects unsafe IDs and over-sized lists", () => {
+  for (
+    const ids of [
+      [" 4c"],
+      ["4c "],
+      ["course/4c"],
+      [""],
+      Array.from({ length: 51 }, (_, index) => `section-${index}`),
+    ]
+  ) {
+    rejects(() => audience(ids));
+  }
+});
+
+Deno.test("legacy shared children still intersect with their restricted module", () => {
+  assert(
+    canAccessSectionContent({
+      ...base,
+      child: {
+        courseId: "course",
+        moduleId: "module",
+        status: "published",
+      },
+    }),
+    "legacy child visible within parent",
+  );
+  assert(
+    !canAccessSectionContent({
+      ...base,
+      enrollment: { ...base.enrollment, sectionId: "4d" },
+      child: {
+        courseId: "course",
+        moduleId: "module",
+        status: "published",
+      },
+    }),
+    "legacy child cannot widen parent",
+  );
+});

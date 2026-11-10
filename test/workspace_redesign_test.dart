@@ -156,6 +156,7 @@ class DashboardFixture extends StatelessWidget {
                   onTasks: () => onAction('tasks'),
                   onInbox: () => onAction('inbox'),
                   onInvitations: () => onAction('invitations'),
+                  onNotes: () => onAction('notes'),
                 ),
               ],
             ),

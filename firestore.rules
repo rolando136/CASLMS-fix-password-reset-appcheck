@@ -88,6 +88,106 @@ service cloud.firestore {
       return isAdmin() || ownsCourse(courseId);
     }
 
+    // Missing sectionIds is supported only for legacy shared records. New
+    // writes must always persist one explicit, well-formed audience.
+    function validSectionAudience(data) {
+      return data.keys().hasAll(['sectionIds']) &&
+        data.sectionIds is list &&
+        data.sectionIds.size() > 0 &&
+        data.sectionIds.size() <= 50 &&
+        (
+          data.sectionIds == ['*'] ||
+          !data.sectionIds.hasAny(['*'])
+        );
+    }
+
+    function storedAudienceIsValid(data) {
+      return !data.keys().hasAny(['sectionIds']) || validSectionAudience(data);
+    }
+
+    function audienceAllows(data, sectionId) {
+      return storedAudienceIsValid(data) &&
+        sectionId is string &&
+        sectionId != '' &&
+        (
+          !data.keys().hasAny(['sectionIds']) ||
+          data.sectionIds.hasAny(['*', sectionId])
+        );
+    }
+
+    function activeEnrollment(courseId) {
+      return get(
+        /databases/$(database)/documents/enrollments/$(courseId + '_' + request.auth.uid)
+      ).data;
+    }
+
+    function studentCanReadModuleData(data) {
+      let enrollmentPath =
+        /databases/$(database)/documents/enrollments/$(data.courseId + '_' + request.auth.uid);
+      return isStudent() &&
+        data.courseId is string &&
+        data.get('status', '') == 'published' &&
+        exists(enrollmentPath) &&
+        activeEnrollment(data.courseId).studentId == request.auth.uid &&
+        activeEnrollment(data.courseId).courseId == data.courseId &&
+        activeEnrollment(data.courseId).status == 'active' &&
+        validInvitedSection(
+          data.courseId,
+          activeEnrollment(data.courseId).get('sectionId', '')
+        ) &&
+        audienceAllows(data, activeEnrollment(data.courseId).get('sectionId', ''));
+    }
+
+    function childAudienceFitsModule(data) {
+      let module = get(
+        /databases/$(database)/documents/modules/$(data.moduleId)
+      ).data;
+      return validSectionAudience(data) &&
+        module.courseId == data.courseId &&
+        storedAudienceIsValid(module) &&
+        (
+          !module.keys().hasAny(['sectionIds']) ||
+          module.sectionIds == ['*'] ||
+          (
+            data.sectionIds != ['*'] &&
+            data.sectionIds.hasOnly(module.sectionIds)
+          )
+        );
+    }
+
+    function studentCanReadChildData(data) {
+      let module = get(
+        /databases/$(database)/documents/modules/$(data.moduleId)
+      ).data;
+      let enrollmentPath =
+        /databases/$(database)/documents/enrollments/$(data.courseId + '_' + request.auth.uid);
+      return isStudent() &&
+        data.courseId is string &&
+        data.moduleId is string &&
+        data.get('status', '') in ['published', 'closed'] &&
+        module.courseId == data.courseId &&
+        module.get('status', '') == 'published' &&
+        exists(enrollmentPath) &&
+        activeEnrollment(data.courseId).studentId == request.auth.uid &&
+        activeEnrollment(data.courseId).courseId == data.courseId &&
+        activeEnrollment(data.courseId).status == 'active' &&
+        validInvitedSection(
+          data.courseId,
+          activeEnrollment(data.courseId).get('sectionId', '')
+        ) &&
+        audienceAllows(module, activeEnrollment(data.courseId).get('sectionId', '')) &&
+        audienceAllows(data, activeEnrollment(data.courseId).get('sectionId', ''));
+    }
+
+    function studentCanReadAssessmentData(data) {
+      return studentCanReadChildData(data) &&
+        (
+          data.get('sectionId', '') == '' ||
+          data.get('sectionId', '') ==
+            activeEnrollment(data.courseId).get('sectionId', '')
+        );
+    }
+
     function validManualGrade(
       itemCollection,
       itemKey,
@@ -178,6 +278,61 @@ service cloud.firestore {
         );
 
       allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    // PRIVATE STUDENT NOTES
+    // Notes live below their owner profile and are never available to staff.
+    // ============================================================
+
+    match /users/{userId}/personalNotes/{noteId} {
+      function isNoteOwner() {
+        return isStudent() && isSelf(userId);
+      }
+
+      function validNote(data) {
+        return data.keys().hasOnly([
+            'ownerId',
+            'title',
+            'content',
+            'createdAt',
+            'updatedAt'
+          ]) &&
+          data.ownerId == userId &&
+          data.title is string &&
+          data.title.size() > 0 &&
+          data.title.size() <= 150 &&
+          data.content is string &&
+          data.content.size() > 0 &&
+          data.content.size() <= 10000;
+      }
+
+      allow get, list: if
+        isNoteOwner() &&
+        resource.data.ownerId == userId;
+
+      allow create: if
+        isNoteOwner() &&
+        validNote(request.resource.data) &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+
+      allow update: if
+        isNoteOwner() &&
+        resource.data.ownerId == userId &&
+        validNote(request.resource.data) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title',
+          'content',
+          'updatedAt'
+        ]);
+
+      allow delete: if
+        isNoteOwner() &&
+        resource.data.ownerId == userId;
     }
 
     // ============================================================
@@ -673,13 +828,16 @@ service cloud.firestore {
     // ============================================================
 
     match /modules/{moduleId} {
-      allow read: if isActive();
+      allow get, list: if isAdmin() ||
+        (isInstructor() && ownsCourse(resource.data.courseId)) ||
+        studentCanReadModuleData(resource.data);
 
       allow create: if isAdmin() || (
         isInstructor() &&
         ownsCourse(
           request.resource.data.courseId
-        )
+        ) &&
+        validSectionAudience(request.resource.data)
       );
 
       allow update: if isAdmin() || (
@@ -688,7 +846,12 @@ service cloud.firestore {
           resource.data.courseId
         ) &&
         request.resource.data.courseId ==
-          resource.data.courseId
+          resource.data.courseId &&
+        validSectionAudience(request.resource.data) &&
+        (
+          request.resource.data.sectionIds == resource.data.get('sectionIds', ['*']) ||
+          resource.data.get('status', '') == 'draft'
+        )
       );
 
       allow delete: if isAdmin() || (
@@ -773,11 +936,22 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // AI PROVIDER HEALTH (SERVER-WRITTEN, ADMIN-READ-ONLY)
+    // ============================================================
+
+    match /aiProviderState/{stateId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // ============================================================
     // LEARNING MATERIALS
     // ============================================================
 
     match /moduleResources/{resourceId} {
-      allow read: if isActive();
+      allow get, list: if isAdmin() ||
+        (isInstructor() && ownsCourse(resource.data.courseId)) ||
+        studentCanReadChildData(resource.data);
 
       allow create: if isAdmin() || (
         isInstructor() &&
@@ -785,7 +959,8 @@ service cloud.firestore {
           request.resource.data.courseId
         ) &&
         request.resource.data.createdBy ==
-          request.auth.uid
+          request.auth.uid &&
+        childAudienceFitsModule(request.resource.data)
       );
 
       allow update: if isAdmin() || (
@@ -794,7 +969,13 @@ service cloud.firestore {
           resource.data.courseId
         ) &&
         request.resource.data.courseId ==
-          resource.data.courseId
+          resource.data.courseId &&
+        request.resource.data.moduleId == resource.data.moduleId &&
+        childAudienceFitsModule(request.resource.data) &&
+        (
+          request.resource.data.sectionIds == resource.data.get('sectionIds', ['*']) ||
+          resource.data.get('status', '') == 'draft'
+        )
       );
 
       allow delete: if isAdmin() || (
@@ -874,25 +1055,7 @@ service cloud.firestore {
       // New assessments with nonempty sectionId are section-restricted.
       // Student list queries must constrain status and sectionId.
       function studentCanReadAssessment(data) {
-        let enrollmentPath =
-          /databases/$(database)/documents/enrollments/$(data.courseId + "_" + request.auth.uid);
-
-        return
-          isStudent() &&
-          data.courseId is string &&
-          data.get('status', '') in ['published', 'closed'] &&
-          exists(enrollmentPath) &&
-          get(enrollmentPath).data.get('studentId', '') == request.auth.uid &&
-          get(enrollmentPath).data.get('courseId', '') == data.courseId &&
-          get(enrollmentPath).data.get('status', '') == 'active' &&
-          (
-            data.get('sectionId', '') == '' ||
-            (
-              data.get('sectionId', '') is string &&
-              get(enrollmentPath).data.get('sectionId', '') ==
-                data.get('sectionId', '')
-            )
-          );
+        return studentCanReadAssessmentData(data);
       }
 
       function studentCanListAssessment(data) {
@@ -928,7 +1091,8 @@ service cloud.firestore {
           request.resource.data.courseId
         ) &&
         request.resource.data.createdBy ==
-          request.auth.uid
+          request.auth.uid &&
+        childAudienceFitsModule(request.resource.data)
       )
       );
 
@@ -939,7 +1103,13 @@ service cloud.firestore {
           resource.data.courseId
         ) &&
         request.resource.data.courseId ==
-          resource.data.courseId
+          resource.data.courseId &&
+        request.resource.data.moduleId == resource.data.moduleId &&
+        childAudienceFitsModule(request.resource.data) &&
+        (
+          request.resource.data.sectionIds == resource.data.get('sectionIds', ['*']) ||
+          resource.data.get('status', '') == 'draft'
+        )
       )
       );
 
@@ -1003,6 +1173,7 @@ service cloud.firestore {
 
         return
           isStudent() &&
+          studentCanReadAssessmentData(assessment) &&
           exists(enrollmentPath) &&
           get(enrollmentPath).data.get('studentId', '') ==
             request.auth.uid &&
@@ -1113,6 +1284,10 @@ service cloud.firestore {
           /databases/$(database)/documents/assessments/$(data.assessmentId)
         ).data;
 
+        let module = get(
+          /databases/$(database)/documents/modules/$(assessment.moduleId)
+        ).data;
+
         let enrollmentPath =
           /databases/$(database)/documents/enrollments/$(data.courseId + '_' + data.studentId);
 
@@ -1176,6 +1351,21 @@ service cloud.firestore {
             'active' &&
           get(enrollmentPath).data.studentId ==
             data.studentId &&
+          get(enrollmentPath).data.courseId ==
+            data.courseId &&
+          audienceAllows(
+            module,
+            get(enrollmentPath).data.get('sectionId', '')
+          ) &&
+          audienceAllows(
+            assessment,
+            get(enrollmentPath).data.get('sectionId', '')
+          ) &&
+          (
+            assessment.get('sectionId', '') == '' ||
+            assessment.get('sectionId', '') ==
+              get(enrollmentPath).data.get('sectionId', '')
+          ) &&
           exists(studentPath) &&
           get(studentPath).data.role ==
             'student' &&
@@ -1307,6 +1497,7 @@ service cloud.firestore {
 
         return
           isStudent() &&
+          studentCanReadAssessmentData(assessment) &&
           data.keys().hasOnly([
             'assessmentId',
             'courseId',
@@ -2381,6 +2572,119 @@ service cloud.firestore {
             request.auth.uid
         );
       }
+    }
+
+    // ============================================================
+    // LIVE MEETING CHAT
+    // Chat access follows the active server-owned live-class session.
+    // ============================================================
+
+    match /meetingMessages/{messageId} {
+      function liveClass(data) {
+        return get(
+          /databases/$(database)/documents/liveClasses/$(data.liveClassId)
+        ).data;
+      }
+
+      function isActiveStudentInMeeting(data, meeting, course) {
+        let enrollmentPath =
+          /databases/$(database)/documents/enrollments/$(data.courseId + '_' + request.auth.uid);
+        let enrollment = get(enrollmentPath).data;
+
+        return isStudent() &&
+          meeting.get('studentIds', []).hasAny([request.auth.uid]) &&
+          exists(enrollmentPath) &&
+          enrollment.studentId == request.auth.uid &&
+          enrollment.courseId == data.courseId &&
+          enrollment.status == 'active' &&
+          (
+            enrollment.get('sectionId', '') == data.sectionId ||
+            (
+              enrollment.get('sectionId', '') == '' &&
+              course.classCode == data.sectionId
+            )
+          );
+      }
+
+      function isActiveLiveClassParticipant(data, allowEnding) {
+        let meetingPath =
+          /databases/$(database)/documents/liveClasses/$(data.liveClassId);
+        let meeting = liveClass(data);
+        let course = get(
+          /databases/$(database)/documents/courses/$(data.courseId)
+        ).data;
+
+        return isActive() &&
+          data.liveClassId is string &&
+          data.liveClassId.size() > 0 &&
+          exists(meetingPath) &&
+          meeting.courseId == data.courseId &&
+          meeting.sectionId == data.sectionId &&
+          meeting.sessionId == data.sessionId &&
+          (
+            meeting.status == 'live' ||
+            (allowEnding && meeting.status == 'ending')
+          ) &&
+          (
+            (
+              isInstructor() &&
+              meeting.instructorId == request.auth.uid &&
+              course.instructorId == request.auth.uid
+            ) ||
+            isActiveStudentInMeeting(data, meeting, course)
+          );
+      }
+
+      function validMeetingMessage(data) {
+        return data.keys().hasOnly([
+            'liveClassId',
+            'courseId',
+            'sectionId',
+            'sessionId',
+            'senderId',
+            'senderName',
+            'senderRole',
+            'text',
+            'clientNonce',
+            'createdAt'
+          ]) &&
+          data.courseId is string && data.courseId.size() > 0 &&
+          data.sectionId is string && data.sectionId.size() > 0 &&
+          data.sessionId is string && data.sessionId.size() > 0 &&
+          data.senderId == request.auth.uid &&
+          data.senderRole == currentUser().role &&
+          data.senderName is string &&
+          data.senderName.size() > 0 &&
+          data.senderName.size() <= 100 &&
+          (
+            data.senderName == currentUser().get('name', '') ||
+            (
+              currentUser().get('name', '') == '' &&
+              (
+                (isInstructor() && data.senderName == 'Instructor') ||
+                (isStudent() && data.senderName == 'Student')
+              )
+            )
+          ) &&
+          data.text is string &&
+          data.text.size() > 0 &&
+          data.text.size() <= 2000 &&
+          data.clientNonce is string &&
+          data.clientNonce.matches('[0-9]+') &&
+          messageId == request.auth.uid + '_' + data.clientNonce &&
+          data.createdAt == request.time;
+      }
+
+      allow get, list: if
+        isActiveLiveClassParticipant(resource.data, true);
+
+      allow create: if
+        isActiveLiveClassParticipant(request.resource.data, false) &&
+        validMeetingMessage(request.resource.data);
+
+      // Meeting history is append-only. Retention is managed by trusted server
+      // code, not meeting participants.
+      allow update, delete: if false;
     }
 
     // ============================================================

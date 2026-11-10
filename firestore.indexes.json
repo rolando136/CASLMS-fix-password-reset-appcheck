@@ -1,6 +1,34 @@
 {
   "indexes": [
     {
+      "collectionGroup": "modules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sectionIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "moduleResources",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sectionIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "moduleId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "assessments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sectionIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "sectionId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "assessments",
       "queryScope": "COLLECTION",
       "fields": [
@@ -116,6 +144,47 @@
           "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
+      ]
+    },
+    {
+      "collectionGroup": "announcements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "targetType", "order": "ASCENDING" },
+        { "fieldPath": "targetRole", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "announcements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "targetType", "order": "ASCENDING" },
+        { "fieldPath": "targetRole", "order": "ASCENDING" },
+        { "fieldPath": "createdByRole", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "meetingMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "sectionId", "order": "ASCENDING" },
+        { "fieldPath": "sessionId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "meetingMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "liveClassId", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "sectionId", "order": "ASCENDING" },
+        { "fieldPath": "sessionId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],

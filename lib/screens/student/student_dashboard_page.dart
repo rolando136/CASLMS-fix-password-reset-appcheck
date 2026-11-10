@@ -677,6 +677,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 onInbox: _inbox,
                 onAssistant: () => widget.onNavigateToTab?.call(6),
                 onInvitations: _openCourseInvitations,
+                onNotes: () => widget.onNavigateToTab?.call(11),
               ),
           ],
         ),

@@ -14,6 +14,16 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const List<Map<String, dynamic>> _sections = <Map<String, dynamic>>[
+  <String, dynamic>{
+    'id': '4C',
+    'name': 'Section 4C',
+    'identifier': '4C',
+    'status': 'active',
+  },
+];
+const List<String> _moduleSectionIds = <String>['4C'];
+
 class _Modules extends Fake implements ModuleService {
   Map<String, Object?>? saved;
   bool fail = false;
@@ -25,6 +35,7 @@ class _Modules extends Fake implements ModuleService {
     required String title,
     required String description,
     required int order,
+    required List<String> sectionIds,
     String status = 'published',
   }) async {
     if (fail) throw ModuleServiceException('Unable to save. Please retry.');
@@ -33,6 +44,7 @@ class _Modules extends Fake implements ModuleService {
       'title': title,
       'description': description,
       'order': order,
+      'sections': sectionIds,
       'status': status,
     };
     return 'new-module';
@@ -48,6 +60,7 @@ class _Materials extends Fake implements LearningMaterialService {
     required String title,
     String description = '',
     required String url,
+    required List<String> sectionIds,
     String resourceType = 'link',
     String status = 'published',
   }) async {
@@ -56,6 +69,7 @@ class _Materials extends Fake implements LearningMaterialService {
       'module': moduleId,
       'title': title,
       'url': url,
+      'sections': sectionIds,
       'type': resourceType,
       'status': status,
     };
@@ -81,6 +95,8 @@ class _Assessments extends Fake implements AssessmentService {
     ],
     required num totalPoints,
     required DateTime dueAt,
+    required List<String> sectionIds,
+    String sectionId = '',
     String status = 'published',
   }) async {
     saved = {
@@ -92,6 +108,8 @@ class _Assessments extends Fake implements AssessmentService {
       'types': allowedSubmissionTypes,
       'points': totalPoints,
       'due': dueAt,
+      'sections': sectionIds,
+      'section': sectionId,
       'status': status,
     };
     return {'id': 'assessment', 'title': title};
@@ -186,11 +204,16 @@ void main() {
                 courseCode: 'IT302',
                 courseTitle: 'Mobile development',
                 moduleService: _Modules(),
+                initialSectionId: '4C',
+                sections: _sections,
               ),
               'material' => InstructorAddLearningMaterialScreen(
                 courseId: 'course',
                 moduleId: 'module',
                 moduleTitle: 'Chapter 1',
+                sections: _sections,
+                moduleSectionIds: _moduleSectionIds,
+                initialSectionId: '4C',
                 materialService: _Materials(),
               ),
               _ => InstructorCreateAssessmentScreen(
@@ -199,6 +222,9 @@ void main() {
                 courseCode: 'IT302',
                 courseTitle: 'Mobile development',
                 moduleTitle: 'Chapter 1',
+                sections: _sections,
+                moduleSectionIds: _moduleSectionIds,
+                initialSectionId: '4C',
                 assessmentService: _Assessments(),
               ),
             };
@@ -234,6 +260,8 @@ void main() {
         InstructorModuleBuilderScreen(
           courseId: 'course',
           moduleService: service,
+          initialSectionId: '4C',
+          sections: _sections,
         ),
       );
       await _tap(t, find.text('Publish module'));
@@ -259,6 +287,7 @@ void main() {
         'title': 'Foundations',
         'description': 'Learn the foundations.',
         'order': 2,
+        'sections': _moduleSectionIds,
         'status': 'draft',
       });
       expect(find.text('Course workspace'), findsOneWidget);
@@ -274,6 +303,9 @@ void main() {
         courseId: 'course',
         moduleId: 'module',
         moduleTitle: 'Chapter 1',
+        sections: _sections,
+        moduleSectionIds: _moduleSectionIds,
+        initialSectionId: '4C',
         materialService: service,
       ),
     );
@@ -297,6 +329,7 @@ void main() {
       'module': 'module',
       'title': 'Useful reference',
       'url': 'https://example.com/lesson',
+      'sections': _moduleSectionIds,
       'type': 'link',
       'status': 'draft',
     });
@@ -311,6 +344,9 @@ void main() {
         courseCode: 'IT302',
         courseTitle: 'Mobile development',
         moduleTitle: 'Chapter 1',
+        sections: _sections,
+        moduleSectionIds: _moduleSectionIds,
+        initialSectionId: '4C',
         assessmentService: service,
       ),
     );
@@ -365,6 +401,9 @@ void main() {
           courseCode: 'IT302',
           courseTitle: 'Mobile development',
           moduleTitle: 'Chapter 1',
+          sections: _sections,
+          moduleSectionIds: _moduleSectionIds,
+          initialSectionId: '4C',
           assessmentService: service,
         ),
       );

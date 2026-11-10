@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'learner_assistant_report.dart';
 import 'student_assessment_query_service.dart';
+import 'course_service.dart';
 
 class LearnerAssistantException implements Exception {
   const LearnerAssistantException(this.message);
@@ -228,9 +229,11 @@ class LearnerAssistantService {
         course['academicYear'],
       ].map(assistantText).where((part) => part.isNotEmpty).join(' · ');
       subjectLabels.add(label);
-      final modules = await _read(
-        _db.collection('modules').where('courseId', isEqualTo: id),
-      );
+      final modules = role == 'student'
+          ? await CourseService().getCourseModules(id)
+          : await _read(
+              _db.collection('modules').where('courseId', isEqualTo: id),
+            );
       final publishedModules = modules
           .where((m) => m['status'] == 'published')
           .map((m) => m['id'])

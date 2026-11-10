@@ -7,11 +7,14 @@ import '../shared/grading_ui.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import 'package:flutter/material.dart';
 
 import '../../services/assessment_service.dart';
 import '../../services/course_section_service.dart';
+import '../../services/section_audience_service.dart';
+import '../../services/ai_router_service.dart';
 import '../../services/firebase_ai_service.dart';
 import '../../services/learning_material_service.dart';
 import '../../services/notification_service.dart';
@@ -123,14 +126,28 @@ class _InstructorModuleDetailScreenState
       : _activeSections
             .firstWhere((s) => s['id'] == _activeSectionId)['name']
             .toString();
-  List<Map<String, dynamic>> get _visibleAssessments => _assessments
-      .where(
-        (a) =>
-            _activeSectionId == null ||
-            (a['sectionId'] ?? '').toString().isEmpty ||
-            a['sectionId'] == _activeSectionId,
-      )
-      .toList();
+  String get _assignedSectionLabel {
+    final module = _module;
+    if (module == null) return 'Unavailable';
+    try {
+      return SectionAudienceService.label(
+        SectionAudienceService.stored(module),
+        _activeSections,
+      );
+    } on FormatException {
+      return 'Invalid audience';
+    }
+  }
+
+  List<Map<String, dynamic>> _filterContent(
+    List<Map<String, dynamic>> records,
+  ) => SectionAudienceService.filterInstructorChildren(records, [
+    ?_module,
+  ], _activeSectionId);
+  List<Map<String, dynamic>> get _visibleAssessments =>
+      _filterContent(_assessments);
+  List<Map<String, dynamic>> get _visibleMaterials =>
+      _filterContent(_materials);
 
   final Set<String> _busyMaterialIds = {};
 
@@ -199,18 +216,8 @@ class _InstructorModuleDetailScreenState
         throw Exception('This module does not belong to the selected course.');
       }
 
-      // ========================================================
-      // PHASE 7C-6: PREPARE EXISTING MATERIALS FOR AI
-      //
-      // Older materials uploaded before the AI metadata update
-      // are safely backfilled here. Materials that are already
-      // prepared are skipped by the service.
-      // ========================================================
-
-      await _learningMaterialService.prepareModuleMaterialsForAi(
-        courseId: widget.courseId,
-        moduleId: widget.moduleId,
-      );
+      // Opening a module is read-only. Legacy metadata backfills are explicit
+      // maintenance operations and must not block viewing course content.
 
       // ========================================================
       // LEARNING MATERIALS
@@ -324,6 +331,9 @@ class _InstructorModuleDetailScreenState
           courseId: widget.courseId,
           moduleId: widget.moduleId,
           moduleTitle: _moduleTitle,
+          sections: _activeSections,
+          moduleSectionIds: SectionAudienceService.stored(_module!),
+          initialSectionId: _activeSectionId,
         ),
       ),
     );
@@ -554,6 +564,9 @@ class _InstructorModuleDetailScreenState
           courseCode: widget.courseCode,
           courseTitle: widget.courseTitle,
           moduleTitle: _moduleTitle,
+          sections: _activeSections,
+          moduleSectionIds: SectionAudienceService.stored(_module!),
+          initialSectionId: _activeSectionId,
         ),
       ),
     );
@@ -1076,8 +1089,12 @@ class _InstructorModuleDetailScreenState
       }
 
       final String? idToken = await publishingUser.getIdToken(true);
+      final appCheck = await FirebaseAppCheck.instance.getToken(true);
 
-      if (idToken == null || idToken.isEmpty) {
+      if (idToken == null ||
+          idToken.isEmpty ||
+          appCheck == null ||
+          appCheck.isEmpty) {
         throw AssessmentServiceException(
           'Unable to verify your instructor account.',
         );
@@ -1085,7 +1102,10 @@ class _InstructorModuleDetailScreenState
 
       final response = await sb.Supabase.instance.client.functions.invoke(
         'assessment-submission',
-        headers: <String, String>{'Authorization': 'Bearer $idToken'},
+        headers: <String, String>{
+          'Authorization': 'Bearer $idToken',
+          'X-Firebase-AppCheck': appCheck,
+        },
         body: <String, dynamic>{
           'action': 'publish_ai_quiz',
           'sectionId': selectedSectionId,
@@ -1873,7 +1893,9 @@ class _InstructorModuleDetailScreenState
       'questions': questions,
       'questionCount': questions.length,
       'aiGenerated': true,
-      'aiModel': 'gemini-3.7-flash',
+      'aiModel': AiRouterService.enabled
+          ? 'ai-router'
+          : FirebaseAiService.configuredModelId,
       'aiDifficulty': draft.difficulty,
       'aiSourceResourceId': draft.sourceResourceId,
       'aiSourceFileName': draft.sourceFileName,
@@ -2572,8 +2594,10 @@ class _InstructorModuleDetailScreenState
         padding: InstructorTaskScaffold.paddingOf(context),
         children: [
           InstructorFormSection(
-            title: 'Section: $_sectionLabel',
-            description: 'Materials are shared with all course sections. Assessments below include the selected section and course-wide work.',
+            title: 'Viewing section: $_sectionLabel',
+            description:
+                'Module assigned to: $_assignedSectionLabel. The selector below '
+                'only filters this instructor view; it does not change who can access the module.',
             child: DropdownButtonFormField<String>(
               key: ValueKey(_activeSectionId),
               initialValue: _activeSectionId ?? '',
@@ -2631,15 +2655,13 @@ class _InstructorModuleDetailScreenState
                   ? [true, false]
                   : [false, true])) ...[
             Text(
-              assessmentFirst
-                  ? 'Assessments'
-                  : 'Learning materials • All sections',
+              assessmentFirst ? 'Assessments' : 'Learning materials',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
             if (assessmentFirst) ...[
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.centerRight,
                 child: FilledButton.tonalIcon(
                   onPressed: _createAssessment,
                   icon: const Icon(Icons.add_rounded),
@@ -2654,10 +2676,10 @@ class _InstructorModuleDetailScreenState
             ] else ...[
               _buildLearningMaterialHeader(),
               const SizedBox(height: 16),
-              if (_materials.isEmpty)
+              if (_visibleMaterials.isEmpty)
                 _buildEmptyMaterials()
               else
-                ..._materials.map(_buildMaterialCard),
+                ..._visibleMaterials.map(_buildMaterialCard),
             ],
             const SizedBox(height: 28),
           ],
