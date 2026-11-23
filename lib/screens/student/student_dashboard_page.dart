@@ -21,8 +21,13 @@ import 'student_course_invitations_page.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   final Function(int)? onNavigateToTab;
+  final GlobalKey? invitationsTourKey;
 
-  const StudentDashboardScreen({super.key, this.onNavigateToTab});
+  const StudentDashboardScreen({
+    super.key,
+    this.onNavigateToTab,
+    this.invitationsTourKey,
+  });
 
   @override
   State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
@@ -610,6 +615,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               )
             else
               StudentDashboardView(
+                invitationsTourKey: widget.invitationsTourKey,
                 firstName: _firstName,
                 courses: [
                   for (var i = 0; i < _courses.take(4).length; i++)

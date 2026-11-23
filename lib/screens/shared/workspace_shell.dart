@@ -71,6 +71,8 @@ class WorkspaceShell extends StatelessWidget {
     this.unreadCount = 0,
     this.profileIndex = 4,
     this.notificationsAvailable = true,
+    this.tourTargets,
+    this.onTour,
   });
   final Widget child;
   final List<WorkspaceDestination> destinations;
@@ -80,6 +82,8 @@ class WorkspaceShell extends StatelessWidget {
   final String name, role;
   final String? photoUrl;
   final bool notificationsAvailable;
+  final Map<int, GlobalKey>? tourTargets;
+  final VoidCallback? onTour;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -98,6 +102,7 @@ class WorkspaceShell extends StatelessWidget {
             destinations: destinations,
             selectedIndex: selectedIndex,
             onSelected: onSelected,
+            tourTargets: tourTargets,
           ),
           child: child,
         );
@@ -110,6 +115,7 @@ class WorkspaceShell extends StatelessWidget {
                 destinations: destinations,
                 selectedIndex: selectedIndex,
                 onSelected: onSelected,
+                tourTargets: tourTargets,
               ),
         body: Row(
           children: [
@@ -214,20 +220,29 @@ class WorkspaceShell extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (role == 'Instructor')
+                  KeyedSubtree(
+                    key: tourTargets?[6],
+                    child: IconButton(
+                      key: const ValueKey('instructor-assistant-entry'),
+                      tooltip: 'Teaching AI',
+                      onPressed: () => onSelected(6),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 44,
+                        height: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 21,
+                        color: AppColors.resolve(context, AppColors.link),
+                      ),
+                    ),
+                  ),
+                if (onTour != null)
                   IconButton(
-                    key: const ValueKey('instructor-assistant-entry'),
-                    tooltip: 'Teaching AI',
-                    onPressed: () => onSelected(6),
-                    constraints: const BoxConstraints.tightFor(
-                      width: 44,
-                      height: 44,
-                    ),
-                    padding: EdgeInsets.zero,
-                    icon: Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 21,
-                      color: AppColors.resolve(context, AppColors.link),
-                    ),
+                    tooltip: 'Take a tour',
+                    onPressed: onTour,
+                    icon: const Icon(Icons.help_outline_rounded, size: 21),
                   ),
                 IconButton(
                   key: const ValueKey('header-theme-button'),
@@ -254,25 +269,28 @@ class WorkspaceShell extends StatelessWidget {
                     color: AppColors.resolve(context, AppColors.darkText),
                   ),
                 ),
-                IconButton(
-                  visualDensity: desktop
-                      ? null
-                      : const VisualDensity(horizontal: -2, vertical: -2),
-                  padding: desktop ? null : EdgeInsets.zero,
-                  constraints: desktop
-                      ? null
-                      : const BoxConstraints.tightFor(width: 40, height: 40),
-                  tooltip: notificationsAvailable
-                      ? 'Notifications${unreadCount > 0 ? ', $unreadCount unread' : ''}'
-                      : 'Notifications unavailable',
-                  onPressed: onInbox,
-                  icon: Badge(
-                    isLabelVisible: unreadCount > 0,
-                    smallSize: 7,
-                    child: Icon(
-                      Icons.notifications_none_rounded,
-                      size: 21,
-                      color: AppColors.resolve(context, AppColors.darkText),
+                KeyedSubtree(
+                  key: tourTargets?[-2],
+                  child: IconButton(
+                    visualDensity: desktop
+                        ? null
+                        : const VisualDensity(horizontal: -2, vertical: -2),
+                    padding: desktop ? null : EdgeInsets.zero,
+                    constraints: desktop
+                        ? null
+                        : const BoxConstraints.tightFor(width: 40, height: 40),
+                    tooltip: notificationsAvailable
+                        ? 'Notifications${unreadCount > 0 ? ', $unreadCount unread' : ''}'
+                        : 'Notifications unavailable',
+                    onPressed: onInbox,
+                    icon: Badge(
+                      isLabelVisible: unreadCount > 0,
+                      smallSize: 7,
+                      child: Icon(
+                        Icons.notifications_none_rounded,
+                        size: 21,
+                        color: AppColors.resolve(context, AppColors.darkText),
+                      ),
                     ),
                   ),
                 ),
@@ -282,39 +300,42 @@ class WorkspaceShell extends StatelessWidget {
                   color: AppColors.resolve(context, AppColors.inputBorder),
                 ),
                 if (role == 'Instructor')
-                  PopupMenuButton<String>(
-                    key: const ValueKey('instructor-account-menu'),
-                    tooltip: 'Account and preferences',
-                    icon: const Icon(Icons.account_circle_outlined, size: 21),
-                    onSelected: (value) {
-                      if (value == 'profile') onSelected(profileIndex);
-                      if (value == 'logout') onLogout();
-                      if (value == 'theme') {
-                        ThemeNotifier.instance.setThemeMode(
-                          Theme.of(context).brightness == Brightness.dark
-                              ? ThemeMode.light
-                              : ThemeMode.dark,
-                        );
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'profile',
-                        child: Text('My profile'),
-                      ),
-                      PopupMenuItem(
-                        value: 'theme',
-                        child: Text(
-                          Theme.of(context).brightness == Brightness.dark
-                              ? 'Use light theme'
-                              : 'Use dark theme',
+                  KeyedSubtree(
+                    key: tourTargets?[4],
+                    child: PopupMenuButton<String>(
+                      key: const ValueKey('instructor-account-menu'),
+                      tooltip: 'Account and preferences',
+                      icon: const Icon(Icons.account_circle_outlined, size: 21),
+                      onSelected: (value) {
+                        if (value == 'profile') onSelected(profileIndex);
+                        if (value == 'logout') onLogout();
+                        if (value == 'theme') {
+                          ThemeNotifier.instance.setThemeMode(
+                            Theme.of(context).brightness == Brightness.dark
+                                ? ThemeMode.light
+                                : ThemeMode.dark,
+                          );
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'profile',
+                          child: Text('My profile'),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'logout',
-                        child: Text('Log out'),
-                      ),
-                    ],
+                        PopupMenuItem(
+                          value: 'theme',
+                          child: Text(
+                            Theme.of(context).brightness == Brightness.dark
+                                ? 'Use light theme'
+                                : 'Use dark theme',
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'logout',
+                          child: Text('Log out'),
+                        ),
+                      ],
+                    ),
                   )
                 else
                   IconButton(
@@ -380,13 +401,16 @@ class WorkspaceShell extends StatelessWidget {
                     for (final d in destinations.where(
                       (d) => role != 'Student' || d.index != profileIndex,
                     ))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 7),
-                        child: _SidebarDestination(
-                          destination: d,
-                          selected: selectedIndex == d.index,
-                          count: d.label == 'Inbox' ? unreadCount : 0,
-                          onTap: () => onSelected(d.index),
+                      KeyedSubtree(
+                        key: tourTargets?[d.index],
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 7),
+                          child: _SidebarDestination(
+                            destination: d,
+                            selected: selectedIndex == d.index,
+                            count: d.label == 'Inbox' ? unreadCount : 0,
+                            onTap: () => onSelected(d.index),
+                          ),
                         ),
                       ),
                   ],
@@ -397,52 +421,58 @@ class WorkspaceShell extends StatelessWidget {
                     children: [
                       const Divider(height: 1),
                       const SizedBox(height: 20),
-                      InkWell(
-                        onTap: () => onSelected(profileIndex),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              WorkspaceAvatar(
-                                name: name,
-                                photoUrl: photoUrl,
-                                size: 36,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      name,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      '$role account',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.resolve(
-                                          context,
-                                          AppColors.secondaryText,
+                      KeyedSubtree(
+                        key: role == 'Student'
+                            ? (tourTargets?[profileIndex])
+                            : null,
+                        child: InkWell(
+                          onTap: () => onSelected(profileIndex),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                WorkspaceAvatar(
+                                  name: name,
+                                  photoUrl: photoUrl,
+                                  size: 36,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        name,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      Text(
+                                        '$role account',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.resolve(
+                                            context,
+                                            AppColors.secondaryText,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Icon(
-                                Icons.unfold_more_rounded,
-                                color: AppColors.resolve(
-                                  context,
-                                  AppColors.secondaryText,
+                                Icon(
+                                  Icons.unfold_more_rounded,
+                                  color: AppColors.resolve(
+                                    context,
+                                    AppColors.secondaryText,
+                                  ),
+                                  size: 18,
                                 ),
-                                size: 18,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -746,10 +776,12 @@ class WorkspaceBottomNavigation extends StatelessWidget {
     required this.destinations,
     required this.selectedIndex,
     required this.onSelected,
+    this.tourTargets,
   });
   final List<WorkspaceDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final Map<int, GlobalKey>? tourTargets;
   bool get _student =>
       destinations.any((d) => d.index == 10 && d.label == 'Calendar') &&
       destinations.any((d) => d.index == 6) &&
@@ -786,22 +818,28 @@ class WorkspaceBottomNavigation extends StatelessWidget {
               child: Row(
                 children: [
                   for (final d in _primary)
-                    _item(
-                      context,
-                      d.index == 6 ? 'AI' : d.label,
-                      d.icon,
-                      selectedIndex == d.index,
-                      () => onSelected(d.index),
-                      ValueKey('nav-${d.index}'),
+                    KeyedSubtree(
+                      key: tourTargets?[d.index],
+                      child: _item(
+                        context,
+                        d.index == 6 ? 'AI' : d.label,
+                        d.icon,
+                        selectedIndex == d.index,
+                        () => onSelected(d.index),
+                        ValueKey('nav-${d.index}'),
+                      ),
                     ),
                   if (destinations.length > 4)
-                    _item(
-                      context,
-                      'More',
-                      Icons.more_horiz_rounded,
-                      _secondary.any((d) => d.index == selectedIndex),
-                      () => _more(context),
-                      const ValueKey('nav-more'),
+                    KeyedSubtree(
+                      key: tourTargets?[-1],
+                      child: _item(
+                        context,
+                        'More',
+                        Icons.more_horiz_rounded,
+                        _secondary.any((d) => d.index == selectedIndex),
+                        () => showMore(context),
+                        const ValueKey('nav-more'),
+                      ),
                     ),
                 ],
               ),
@@ -858,7 +896,7 @@ class WorkspaceBottomNavigation extends StatelessWidget {
     ),
   );
 
-  Future<void> _more(BuildContext context) async {
+  Future<void> showMore(BuildContext context) async {
     final index = await showModalBottomSheet<int>(
       context: context,
       useSafeArea: true,

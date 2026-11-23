@@ -9,7 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/instructor_workspace_context.dart';
 
 import 'instructor_teaching_assistant_page.dart';
-import '../shared/caslms_help_page.dart';
+import '../shared/workspace_tour.dart';
 import '../shared/authenticated_workspace.dart';
 import '../shared/workspace_shell.dart';
 import '../shared/calendar_page.dart';
@@ -30,6 +30,20 @@ class InstructorMainScreen extends StatefulWidget {
 }
 
 class _InstructorMainScreenState extends State<InstructorMainScreen> {
+  final Map<int, GlobalKey> _tourTargets = {
+    for (final index in [0, 1, 2, 3, 4, 5, 6, 7, -2]) index: GlobalKey(),
+    -1: GlobalKey(),
+    -3: GlobalKey(),
+  };
+
+  void _showTour({bool automatic = false}) => WorkspaceTour.show(
+    context,
+    role: 'instructor',
+    selectedIndex: _selectedIndex,
+    targets: _tourTargets,
+    onNavigate: _onItemTapped,
+    automatic: automatic,
+  );
   StreamSubscription<User?>? _contextAuth;
   @override
   void initState() {
@@ -43,7 +57,7 @@ class _InstructorMainScreenState extends State<InstructorMainScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      CaslmsOnboarding.maybeShow(context, role: 'instructor');
+      if (widget.notificationId == null) _showTour(automatic: true);
     });
   }
 
@@ -85,7 +99,11 @@ class _InstructorMainScreenState extends State<InstructorMainScreen> {
   @override
   Widget build(BuildContext context) {
     final List<WidgetBuilder> pages = [
-      (_) => InstructorDashboardScreen(onNavigateToTab: _onItemTapped),
+      (_) => InstructorDashboardScreen(
+        onNavigateToTab: _onItemTapped,
+        onTour: () => _showTour(),
+        createTourKey: _tourTargets[-3],
+      ),
       (_) => const InstructorClassesScreen(),
       (_) => const InstructorGradingScreen(),
       (_) => const InstructorAnalyticsScreen(),
@@ -100,6 +118,8 @@ class _InstructorMainScreenState extends State<InstructorMainScreen> {
       destinations: instructorDestinations,
       selectedIndex: _selectedIndex,
       onSelected: _onItemTapped,
+      tourTargets: _tourTargets,
+      onTour: () => _showTour(),
       child: IndexedStack(
         index: _selectedIndex,
         children: List.generate(

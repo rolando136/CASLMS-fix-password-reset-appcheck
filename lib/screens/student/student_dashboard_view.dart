@@ -27,6 +27,7 @@ class StudentDashboardView extends StatelessWidget {
     this.summaryError,
     this.onRetry,
     this.onAssistant,
+    this.invitationsTourKey,
   });
   final String firstName;
   final List<CourseSummary> courses;
@@ -38,6 +39,7 @@ class StudentDashboardView extends StatelessWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onAssistant;
   final String? summaryError;
+  final GlobalKey? invitationsTourKey;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -144,18 +146,21 @@ class StudentDashboardView extends StatelessWidget {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  key: const ValueKey('course-invitations'),
-                  onPressed: onInvitations,
-                  icon: Badge(
-                    isLabelVisible: pendingInvitations > 0,
-                    label: Text('$pendingInvitations'),
-                    child: const Icon(Icons.mail_outline_rounded, size: 18),
-                  ),
-                  label: Text(
-                    pendingInvitations > 0
-                        ? 'Course invitations ($pendingInvitations)'
-                        : 'Course invitations',
+                child: KeyedSubtree(
+                  key: invitationsTourKey,
+                  child: TextButton.icon(
+                    key: const ValueKey('course-invitations'),
+                    onPressed: onInvitations,
+                    icon: Badge(
+                      isLabelVisible: pendingInvitations > 0,
+                      label: Text('$pendingInvitations'),
+                      child: const Icon(Icons.mail_outline_rounded, size: 18),
+                    ),
+                    label: Text(
+                      pendingInvitations > 0
+                          ? 'Course invitations ($pendingInvitations)'
+                          : 'Course invitations',
+                    ),
                   ),
                 ),
               ),

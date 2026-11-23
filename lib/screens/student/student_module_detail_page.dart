@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/assessment_submission_service.dart';
+import '../../services/course_content_paths.dart';
 import '../../services/student_assessment_query_service.dart';
 import '../../services/learning_material_service.dart';
 import '../../services/section_audience_service.dart';
@@ -66,6 +67,7 @@ class _StudentModuleDetailScreenState extends State<StudentModuleDetailScreen>
 
   final AssessmentSubmissionService _submissionService =
       AssessmentSubmissionService();
+  final LearningMaterialService _materialService = LearningMaterialService();
 
   // ============================================================
   // STATE
@@ -196,7 +198,7 @@ class _StudentModuleDetailScreenState extends State<StudentModuleDetailScreen>
       if (enrollmentStatus != 'active') {
         throw Exception('Your enrollment in this course is not active.');
       }
-      final sectionId = (enrollmentDocument.data()!['sectionId'] ?? '')
+      var sectionId = (enrollmentDocument.data()!['sectionId'] ?? '')
           .toString()
           .trim();
 
@@ -221,13 +223,20 @@ class _StudentModuleDetailScreenState extends State<StudentModuleDetailScreen>
       if (courseStatus != 'active') {
         throw Exception('This course is not currently active.');
       }
+      if (sectionId.isEmpty) {
+        sectionId = (courseData['classCode'] ?? '').toString().trim();
+      }
 
       // ----------------------------------------------------------
       // MODULE
       // ----------------------------------------------------------
 
       final DocumentSnapshot<Map<String, dynamic>> moduleDocument =
-          await _firestore.collection('modules').doc(widget.moduleId).get();
+          await CourseContentPaths.module(
+            _firestore,
+            widget.courseId,
+            widget.moduleId,
+          ).get();
 
       if (!moduleDocument.exists || moduleDocument.data() == null) {
         throw Exception('Module could not be found.');
@@ -322,32 +331,21 @@ class _StudentModuleDetailScreenState extends State<StudentModuleDetailScreen>
       // This query is safe if the collection is empty.
       // ----------------------------------------------------------
 
-      final QuerySnapshot<Map<String, dynamic>> resourceSnapshot =
-          await _firestore
-              .collection('moduleResources')
-              .where('moduleId', isEqualTo: widget.moduleId)
-              .where('status', isEqualTo: 'published')
-              .where(
-                'sectionIds',
-                arrayContainsAny: <String>[
-                  SectionAudienceService.allSections,
-                  sectionId,
-                ],
-              )
-              .get();
-
-      final List<Map<String, dynamic>> resources = resourceSnapshot.docs
-          .map((document) => {...document.data(), 'id': document.id})
-          .where((resource) {
-            final String status = (resource['status'] ?? 'published')
-                .toString()
-                .trim()
-                .toLowerCase();
-
-            return (resource['courseId'] ?? '').toString() == widget.courseId &&
-                status == 'published';
-          })
-          .toList();
+      final enrollment = <String, dynamic>{
+        ...enrollmentDocument.data()!,
+        'sectionId': sectionId,
+      };
+      final List<Map<String, dynamic>> resources =
+          (await _materialService.getModuleMaterials(
+            courseId: widget.courseId,
+            moduleId: widget.moduleId,
+          )).where((resource) {
+            return SectionAudienceService.studentCanAccess(
+              enrollment: enrollment,
+              module: {...moduleData, 'id': widget.moduleId},
+              child: resource,
+            );
+          }).toList();
 
       if (!mounted) {
         return;

@@ -12,6 +12,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 import '../config/supabase_config.dart';
+import 'course_content_paths.dart';
 import 'notification_service.dart';
 import 'section_audience_service.dart';
 
@@ -56,28 +57,38 @@ class LearningMaterialService {
     String action,
     Map<String, dynamic> body,
   ) async {
-    final user = _requireAuthenticatedUser();
-    final idToken = await user.getIdToken();
-    final appCheck = await FirebaseAppCheck.instance.getToken(true);
-    if (idToken == null || appCheck == null || appCheck.isEmpty) {
-      throw LearningMaterialException('Unable to verify this device.');
-    }
-    final response = await _supabase.functions.invoke(
-      'assessment-submission',
-      headers: <String, String>{
-        'Authorization': 'Bearer $idToken',
-        'X-Firebase-AppCheck': appCheck,
-      },
-      body: <String, dynamic>{'action': action, ...body},
-    );
-    final data = response.data;
-    if (data is! Map || data['success'] != true) {
-      final message = data is Map ? (data['error'] ?? '').toString() : '';
+    try {
+      final user = _requireAuthenticatedUser();
+      final idToken = await user.getIdToken();
+      final appCheck = await FirebaseAppCheck.instance.getToken(true);
+      if (idToken == null || appCheck == null || appCheck.isEmpty) {
+        throw LearningMaterialException('Unable to verify this device.');
+      }
+      final response = await _supabase.functions.invoke(
+        'assessment-submission',
+        headers: <String, String>{
+          'Authorization': 'Bearer $idToken',
+          'X-Firebase-AppCheck': appCheck,
+        },
+        body: <String, dynamic>{'action': action, ...body},
+      );
+      final data = response.data;
+      if (data is! Map || data['success'] != true) {
+        final message = data is Map ? (data['error'] ?? '').toString() : '';
+        throw LearningMaterialException(
+          message.isEmpty ? 'Unable to authorize the file operation.' : message,
+        );
+      }
+      return Map<String, dynamic>.from(data);
+    } on LearningMaterialException {
+      rethrow;
+    } on sb.FunctionException catch (error) {
+      final details = error.details;
+      final message = details is Map ? (details['error'] ?? '').toString() : '';
       throw LearningMaterialException(
         message.isEmpty ? 'Unable to authorize the file operation.' : message,
       );
     }
-    return Map<String, dynamic>.from(data);
   }
 
   // ============================================================
@@ -199,38 +210,6 @@ class LearningMaterialService {
     }
 
     return {...module, 'id': document.id, 'moduleId': document.id};
-  }
-
-  // ============================================================
-  // VERIFY STUDENT ENROLLMENT
-  // ============================================================
-
-  Future<Map<String, dynamic>> _requireEnrollment({
-    required String courseId,
-    required String studentId,
-  }) async {
-    final String enrollmentId = '${courseId.trim()}_${studentId.trim()}';
-
-    final DocumentSnapshot<Map<String, dynamic>> document = await _firestore
-        .collection('enrollments')
-        .doc(enrollmentId)
-        .get();
-
-    if (!document.exists || document.data() == null) {
-      throw LearningMaterialException('You are not enrolled in this course.');
-    }
-
-    final String status = (document.data()!['status'] ?? '')
-        .toString()
-        .trim()
-        .toLowerCase();
-
-    if (status != 'active') {
-      throw LearningMaterialException(
-        'Your enrollment in this course is not active.',
-      );
-    }
-    return {...document.data()!, 'id': document.id};
   }
 
   Future<List<String>> _requireChildAudience({
@@ -685,7 +664,17 @@ class LearningMaterialService {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      await resourceReference.set(data);
+      final batch = _firestore.batch()
+        ..set(resourceReference, data)
+        ..set(
+          CourseContentPaths.resources(
+            _firestore,
+            cleanCourseId,
+            cleanModuleId,
+          ).doc(resourceId),
+          data,
+        );
+      await batch.commit();
       unawaited(
         ActivityLogService(
           auth: _auth,
@@ -828,7 +817,17 @@ class LearningMaterialService {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    await document.set(data);
+    final batch = _firestore.batch()
+      ..set(document, data)
+      ..set(
+        CourseContentPaths.resources(
+          _firestore,
+          courseId.trim(),
+          moduleId.trim(),
+        ).doc(document.id),
+        data,
+      );
+    await batch.commit();
 
     if (normalizedStatus == 'published') {
       await _createPublishedNotificationsBestEffort(document.id);
@@ -897,6 +896,8 @@ class LearningMaterialService {
     // ----------------------------------------------------------
 
     String? studentSectionId;
+    Map<String, dynamic>? studentEnrollment;
+    Map<String, dynamic>? studentModule;
     if (role == 'instructor') {
       await _requireOwnedModule(
         courseId: cleanCourseId,
@@ -912,10 +913,11 @@ class LearningMaterialService {
         throw LearningMaterialException('Your student account is not active.');
       }
 
-      final enrollment = await _requireEnrollment(
+      final enrollment = await _sectionAudience.requireActiveEnrollment(
         courseId: cleanCourseId,
         studentId: userId,
       );
+      studentEnrollment = enrollment;
       studentSectionId = (enrollment['sectionId'] ?? '').toString().trim();
 
       // Students never receive draft materials.
@@ -930,26 +932,78 @@ class LearningMaterialService {
     // FIRESTORE QUERY
     // ----------------------------------------------------------
 
-    Query<Map<String, dynamic>> query = _firestore
-        .collection(collectionName)
-        .where('courseId', isEqualTo: cleanCourseId)
-        .where('moduleId', isEqualTo: cleanModuleId);
+    late final QuerySnapshot<Map<String, dynamic>> snapshot;
     if (studentSectionId != null) {
-      query = query.where(
-        'sectionIds',
-        arrayContainsAny: <String>[
-          SectionAudienceService.allSections,
-          studentSectionId,
-        ],
-      );
+      final moduleDocument = await CourseContentPaths.module(
+        _firestore,
+        cleanCourseId,
+        cleanModuleId,
+      ).get(const GetOptions(source: Source.server));
+      final module = moduleDocument.data();
+      if (module == null ||
+          studentEnrollment == null ||
+          !SectionAudienceService.studentCanAccess(
+            enrollment: studentEnrollment,
+            module: {...module, 'id': moduleDocument.id},
+          )) {
+        return const <Map<String, dynamic>>[];
+      }
+      studentModule = {...module, 'id': moduleDocument.id};
+      snapshot =
+          await CourseContentPaths.resources(
+                _firestore,
+                cleanCourseId,
+                cleanModuleId,
+              )
+              .where('courseId', isEqualTo: cleanCourseId)
+              .where('moduleId', isEqualTo: cleanModuleId)
+              .where('status', isEqualTo: 'published')
+              .where(
+                'sectionIds',
+                arrayContainsAny: <String>[
+                  SectionAudienceService.allSections,
+                  studentSectionId,
+                ],
+              )
+              .get();
+    } else {
+      Query<Map<String, dynamic>> query = _firestore
+          .collection(collectionName)
+          .where('courseId', isEqualTo: cleanCourseId)
+          .where('moduleId', isEqualTo: cleanModuleId);
+      if (publishedOnly) {
+        query = query.where('status', isEqualTo: 'published');
+      }
+      snapshot = await query.get();
     }
-    final QuerySnapshot<Map<String, dynamic>> snapshot = await query.get();
 
     final List<Map<String, dynamic>> materials = [];
 
     for (final QueryDocumentSnapshot<Map<String, dynamic>> document
         in snapshot.docs) {
-      final Map<String, dynamic> data = document.data();
+      Map<String, dynamic> data = document.data();
+
+      if (studentEnrollment != null && studentModule != null) {
+        try {
+          final canonicalDocument = await _firestore
+              .collection(collectionName)
+              .doc(document.id)
+              .get(const GetOptions(source: Source.server));
+          final canonical = canonicalDocument.data();
+          if (canonical == null ||
+              !SectionAudienceService.studentCanAccess(
+                enrollment: studentEnrollment,
+                module: studentModule,
+                child: canonical,
+              )) {
+            continue;
+          }
+          data = canonical;
+        } on FirebaseException catch (error) {
+          if (error.code == 'permission-denied') continue;
+          rethrow;
+        }
+      }
 
       if ((data['courseId'] ?? '').toString().trim() != cleanCourseId) {
         continue;
@@ -1124,7 +1178,17 @@ class LearningMaterialService {
         updates.addAll(_aiMetadataForExternalLink());
       }
 
-      batch.update(document.reference, updates);
+      batch
+        ..update(document.reference, updates)
+        ..set(
+          CourseContentPaths.resources(
+            _firestore,
+            cleanCourseId,
+            cleanModuleId,
+          ).doc(document.id),
+          {...data, ...updates},
+          SetOptions(merge: true),
+        );
 
       updatedCount++;
     }
@@ -1176,11 +1240,24 @@ class LearningMaterialService {
       moduleId: (material['moduleId'] ?? '').toString(),
     );
 
-    await reference.update({
+    final courseId = (material['courseId'] ?? '').toString().trim();
+    final moduleId = (material['moduleId'] ?? '').toString().trim();
+    final updates = <String, dynamic>{
       'status': normalizedStatus,
-
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
+    final batch = _firestore.batch()
+      ..update(reference, updates)
+      ..set(
+        CourseContentPaths.resources(
+          _firestore,
+          courseId,
+          moduleId,
+        ).doc(cleanId),
+        {...material, ...updates},
+        SetOptions(merge: true),
+      );
+    await batch.commit();
 
     if (normalizedStatus == 'published') {
       await _createPublishedNotificationsBestEffort(cleanId);
@@ -1270,7 +1347,18 @@ class LearningMaterialService {
     // REMOVE FIRESTORE METADATA
     // ----------------------------------------------------------
 
-    await resourceReference.delete();
+    final courseId = (material['courseId'] ?? '').toString().trim();
+    final moduleId = (material['moduleId'] ?? '').toString().trim();
+    final batch = _firestore.batch()
+      ..delete(resourceReference)
+      ..delete(
+        CourseContentPaths.resources(
+          _firestore,
+          courseId,
+          moduleId,
+        ).doc(cleanId),
+      );
+    await batch.commit();
   }
 
   // ============================================================

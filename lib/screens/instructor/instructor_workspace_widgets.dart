@@ -289,8 +289,10 @@ class InstructorDashboardContent extends StatelessWidget {
     this.onCreateModule,
     this.onCreateAssessment,
     this.onCreateMaterial,
+    this.createTourKey,
   });
   final VoidCallback? onRefresh;
+  final GlobalKey? createTourKey;
   final String name;
   final VoidCallback? onCreateModule, onCreateAssessment, onCreateMaterial;
   final int enrollments, pending, courseCount;
@@ -446,6 +448,7 @@ class InstructorDashboardContent extends StatelessWidget {
                   ),
                 ),
                 PopupMenuButton<String>(
+                  key: createTourKey,
                   tooltip: 'Create course content',
                   onSelected: (value) {
                     switch (value) {

@@ -19,8 +19,15 @@ import 'instructor_quick_create_page.dart';
 
 class InstructorDashboardScreen extends StatefulWidget {
   final Function(int)? onNavigateToTab;
+  final VoidCallback? onTour;
+  final GlobalKey? createTourKey;
 
-  const InstructorDashboardScreen({super.key, this.onNavigateToTab});
+  const InstructorDashboardScreen({
+    super.key,
+    this.onNavigateToTab,
+    this.onTour,
+    this.createTourKey,
+  });
 
   @override
   State<InstructorDashboardScreen> createState() =>
@@ -414,6 +421,7 @@ class _InstructorDashboardScreenState extends State<InstructorDashboardScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(22, 4, 22, 32),
               child: InstructorDashboardContent(
+                createTourKey: widget.createTourKey,
                 name: _instructorName,
                 onRefresh: _loadDashboard,
                 enrollments: _activeStudentCount,
@@ -437,12 +445,15 @@ class _InstructorDashboardScreenState extends State<InstructorDashboardScreen> {
                     builder: (_) => const InstructorAnnouncementsScreen(),
                   ),
                 ),
-                onHelp: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CaslmsHelpPage(role: 'instructor'),
-                  ),
-                ),
+                onHelp: () async {
+                  final replay = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute<bool>(
+                      builder: (_) => const CaslmsHelpPage(role: 'instructor'),
+                    ),
+                  );
+                  if (replay == true && mounted) widget.onTour?.call();
+                },
               ),
             ),
           ),

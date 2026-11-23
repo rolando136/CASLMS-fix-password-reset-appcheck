@@ -1,6 +1,7 @@
 import '../shared/page_loading_state.dart';
 import '../../core/app_colors.dart';
 import '../../services/activity_log_service.dart';
+import '../../services/course_content_migration_service.dart';
 import '../shared/workspace_widgets.dart';
 import '../shared/workspace_shell.dart';
 
@@ -33,10 +34,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final ProfilePictureService _profilePictureService = ProfilePictureService();
+  late final CourseContentMigrationService _courseContentMigration =
+      CourseContentMigrationService(firestore: _firestore, auth: _auth);
 
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isUploadingPhoto = false;
+  bool _isMigratingCourseContent = false;
   String? _errorMessage;
 
   Map<String, dynamic>? _adminProfile;
@@ -539,6 +543,63 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     }
   }
 
+  Future<void> _migrateCourseContent() async {
+    if (_isMigratingCourseContent) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text(
+          'Migrate course content',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: const Text(
+          'Copy existing modules, materials, assessments, and course events '
+          'into the student-safe course structure? Legacy records will remain '
+          'unchanged, and this operation can be run again safely.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Start migration'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isMigratingCourseContent = true);
+    try {
+      final result = await _courseContentMigration.migrateLegacyContent();
+      if (!mounted) return;
+      _showMessage(
+        'Migration complete: ${result.copied} records copied '
+        '(${result.modules} modules, ${result.resources} materials, '
+        '${result.assessments} assessments, '
+        '${result.calendarEvents} events). '
+        '${result.skipped} invalid or schoolwide records skipped.',
+      );
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      final message = error.code == 'resource-exhausted'
+          ? 'Firestore free-tier quota is currently exhausted. Run the '
+                'migration again after the daily quota resets.'
+          : error.message ?? 'Course content migration failed.';
+      _showError(message);
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error.toString().replaceFirst('Bad state: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _isMigratingCourseContent = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const PageLoadingState();
@@ -645,6 +706,26 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           const SizedBox(height: 14),
           _buildSecurityNotice(),
           const SizedBox(height: 28),
+          const WorkspaceSectionHeading(
+            title: 'Course data migration',
+            subtitle:
+                'Copy legacy course content into student-safe scoped paths.',
+          ),
+          const SizedBox(height: 14),
+          _buildActionTile(
+            title: _isMigratingCourseContent
+                ? 'Migrating course content…'
+                : 'Migrate existing course content',
+            subtitle: _isMigratingCourseContent
+                ? 'Keep this page open until all records are copied.'
+                : 'Safe and repeatable. Existing instructor records are not deleted.',
+            icon: _isMigratingCourseContent
+                ? Icons.sync_rounded
+                : Icons.account_tree_outlined,
+            color: adminTheme,
+            onTap: _migrateCourseContent,
+          ),
+          const SizedBox(height: 18),
           const WorkspaceSectionHeading(
             title: 'Administrator session',
             subtitle: 'Manage your active Firebase authentication session.',

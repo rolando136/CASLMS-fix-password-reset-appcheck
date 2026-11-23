@@ -18,6 +18,8 @@ class AuthenticatedWorkspace extends StatefulWidget {
     this.role = 'Student',
     this.profileIndex = 4,
     this.inboxIndex,
+    this.tourTargets,
+    this.onTour,
   });
   final Widget child;
   final List<WorkspaceDestination> destinations;
@@ -25,6 +27,8 @@ class AuthenticatedWorkspace extends StatefulWidget {
   final int? inboxIndex;
   final ValueChanged<int> onSelected;
   final String role;
+  final Map<int, GlobalKey>? tourTargets;
+  final VoidCallback? onTour;
   @override
   State<AuthenticatedWorkspace> createState() => _AuthenticatedWorkspaceState();
 }
@@ -94,6 +98,8 @@ class _AuthenticatedWorkspaceState extends State<AuthenticatedWorkspace> {
               destinations: widget.destinations,
               selectedIndex: widget.selectedIndex,
               onSelected: widget.onSelected,
+              tourTargets: widget.tourTargets,
+              onTour: widget.onTour,
               onInbox: _inbox,
               onLogout: _logout,
               role: widget.role,

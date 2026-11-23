@@ -151,11 +151,31 @@ class SectionAudienceService {
     if (data == null ||
         data['studentId'] != studentId ||
         data['courseId'] != courseId ||
-        data['status'] != 'active' ||
-        (data['sectionId'] ?? '').toString().trim().isEmpty) {
+        data['status'] != 'active') {
       throw const FormatException('An active section enrollment is required.');
     }
-    return <String, dynamic>{...data, 'id': document.id};
+    var sectionId = (data['sectionId'] ?? '').toString().trim();
+    if (sectionId.isEmpty) {
+      final course = await _firestore
+          .collection('courses')
+          .doc(courseId)
+          .get(const GetOptions(source: Source.server));
+      final courseData = course.data();
+      if (courseData?['status'] != 'active') {
+        throw const FormatException(
+          'An active section enrollment is required.',
+        );
+      }
+      sectionId = (courseData?['classCode'] ?? '').toString().trim();
+    }
+    if (sectionId.isEmpty) {
+      throw const FormatException('An active section enrollment is required.');
+    }
+    return <String, dynamic>{
+      ...data,
+      'id': document.id,
+      'sectionId': sectionId,
+    };
   }
 
   static bool studentCanAccess({
@@ -174,8 +194,10 @@ class SectionAudienceService {
         return false;
       }
       if (child == null) return true;
+      final moduleId = (module['moduleId'] ?? module['id'] ?? '').toString();
       if (child['courseId'] != courseId ||
-          child['moduleId'] == null ||
+          moduleId.isEmpty ||
+          child['moduleId'] != moduleId ||
           !const <String>['published', 'closed'].contains(child['status']) ||
           !allows(stored(child), sectionId)) {
         return false;

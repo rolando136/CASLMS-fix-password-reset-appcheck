@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import '../shared/learner_assistant_page.dart';
 import '../shared/authenticated_workspace.dart';
 import '../shared/workspace_shell.dart';
+import '../shared/workspace_tour.dart';
 import '../shared/calendar_page.dart';
 import 'student_messages_page.dart';
 
@@ -36,6 +37,20 @@ class _StudentMainScreenState extends State<StudentMainScreen>
     value: 1,
   );
   int _selectedIndex = 0;
+  final Map<int, GlobalKey> _tourTargets = {
+    for (final index in [0, 1, 2, 3, 4, 5, 6, 10, 11, -2]) index: GlobalKey(),
+    -1: GlobalKey(),
+    -4: GlobalKey(),
+  };
+
+  void _showTour({bool automatic = false}) => WorkspaceTour.show(
+    context,
+    role: 'student',
+    selectedIndex: _selectedIndex,
+    targets: _tourTargets,
+    onNavigate: _onItemTapped,
+    automatic: automatic,
+  );
   final _resultsSelection = ValueNotifier<int>(0);
   bool _destinationVisible = true;
   final _notificationKey = GlobalKey();
@@ -67,7 +82,10 @@ class _StudentMainScreenState extends State<StudentMainScreen>
     super.initState();
 
     _pages = [
-      StudentDashboardScreen(onNavigateToTab: _onItemTapped),
+      StudentDashboardScreen(
+        onNavigateToTab: _onItemTapped,
+        invitationsTourKey: _tourTargets[-4],
+      ),
       const ModulesScreen(),
       const StudentAssignmentsScreen(),
       StudentResultsScreen(selection: _resultsSelection),
@@ -82,6 +100,11 @@ class _StudentMainScreenState extends State<StudentMainScreen>
     ];
 
     _startNotificationPopups();
+    if (widget.notificationId == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showTour(automatic: true);
+      });
+    }
   }
 
   @override
@@ -186,6 +209,8 @@ class _StudentMainScreenState extends State<StudentMainScreen>
       destinations: studentDestinations,
       selectedIndex: _selectedIndex,
       onSelected: _onItemTapped,
+      tourTargets: _tourTargets,
+      onTour: () => _showTour(),
       inboxIndex: 9,
       child: FadeTransition(
         opacity: CurvedAnimation(
